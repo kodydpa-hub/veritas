@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════
-//  AUTHENTIC — Phase 0: Canister Basics
+//  VERITAS — Phase 0: Canister Basics
 //  Verifies: canister exists, responds to queries, stats
 // ════════════════════════════════════════════════════════════
 const assert = require('assert');
@@ -9,7 +9,7 @@ const NETWORK = process.argv.find(a => a.startsWith('--network='))?.split('=')[1
 const CANISTER_ID = process.argv.find(a => a.startsWith('--canister='))?.split('=')[1] || '';
 
 function dfx(method, args = '()') {
-  const cmd = `dfx canister --network ${NETWORK} call ${CANISTER_ID || 'authentic_backend'} ${method} '${args}' 2>&1`;
+  const cmd = `dfx canister --network ${NETWORK} call ${CANISTER_ID || 'veritas_backend'} ${method} '${args}' 2>&1`;
   const out = execSync(cmd, { encoding: 'utf8', timeout: 30000 }).trim();
   return out;
 }

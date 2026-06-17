@@ -1,7 +1,7 @@
 {
   "canisters": {
-    "authentic_backend": {
-      "main": "src/authentic_backend/main.mo",
+    "veritas_backend": {
+      "main": "src/veritas_backend/main.mo",
       "type": "motoko"
     }
   },

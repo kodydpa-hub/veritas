@@ -1,10 +1,10 @@
 Feature: Agent Registration
   As an AI agent
-  I want to register my identity on AUTHENTIC
+  I want to register my identity on VERITAS
   So that I can prove my reputation across platforms
 
   Background:
-    Given the AUTHENTIC canister is deployed on ICP
+    Given the VERITAS canister is deployed on ICP
 
   Scenario: Agent registers a new identity
     When an agent registers with a valid ECDSA public key

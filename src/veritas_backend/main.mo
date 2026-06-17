@@ -14,12 +14,12 @@ import Error "mo:base/Error";
 import ExperimentalCycles "mo:base/ExperimentalCycles";
 
 // ════════════════════════════════════════════════════════════
-//  AUTHENTIC — Verifiable AI Agent Identity Protocol
+//  VERITAS — Verifiable AI Agent Identity Protocol
 //  Phase 0: Canister Shell (Identity Registry + Cycle Accounting)
 //  Version: 1.0.0
 // ════════════════════════════════════════════════════════════
 
-shared actor class Authentic() = this {
+shared actor class Veritas() = this {
 
   // ── Versioned Storage for Upgrade Safety (§6.8c) ──
   stable var storageVersion : Nat = 1;
@@ -132,7 +132,7 @@ shared actor class Authentic() = this {
   //  IDENTITY REGISTRY
   // ══════════════════════════════════════════════════════════
 
-  /// Register a new AUTHENTIC identity.
+  /// Register a new VERITAS identity.
   /// Caller's `Principal` becomes the agent's stable identifier (never changes).
   /// `publicKey` is the agent's ECDSA public key for proof-of-possession.
   /// Fee: 3B cycles deducted from caller's balance.

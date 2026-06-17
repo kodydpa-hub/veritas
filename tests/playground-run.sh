@@ -1,6 +1,6 @@
 #!/bin/bash
 # ════════════════════════════════════════════════════════════
-#  AUTHENTIC — Playground Deploy + Regression Runner
+#  VERITAS — Playground Deploy + Regression Runner
 #  Phase 0: Canister Shell
 # ════════════════════════════════════════════════════════════
 set -euo pipefail
@@ -16,7 +16,7 @@ SKIP=0
 cd "$PROJECT_DIR"
 
 echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║  AUTHENTIC — Playground Run                              ║"
+echo "║  VERITAS — Playground Run                              ║"
 echo "║  ${TIMESTAMP}                                ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 
@@ -26,7 +26,7 @@ echo "📦 Deploying to ICP Playground..."
 dfx deploy --network playground --no-wallet 2>&1 | tail -5
 
 # Get canister IDs
-BACKEND_ID=$(dfx canister --network playground id authentic_backend 2>/dev/null || echo "")
+BACKEND_ID=$(dfx canister --network playground id veritas_backend 2>/dev/null || echo "")
 echo "   Backend: ${BACKEND_ID}"
 
 # ── Step 2: Deploy test framework dependencies ──
