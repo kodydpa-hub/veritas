@@ -1,0 +1,31 @@
+{
+  "name": "veritas-verify",
+  "version": "0.1.0",
+  "description": "VERITAS verification library — verify W3C Verifiable Credentials, proof-of-possession, and ECDSA signatures from the VERITAS identity protocol",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kodydpa-hub/veritas.git",
+    "directory": "packages/veritas-verify"
+  },
+  "keywords": ["veritas", "verifiable-credential", "did", "icp", "agent-identity", "vc", "w3c"],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/**/*.test.js",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.6.0",
+    "@noble/hashes": "^1.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
