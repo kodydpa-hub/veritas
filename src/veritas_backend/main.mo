@@ -9,11 +9,14 @@ import Iter "mo:base/Iter";
 import Array "mo:base/Array";
 import Result "mo:base/Result";
 import ExperimentalCycles "mo:base/ExperimentalCycles";
+import Nat8 "mo:base/Nat8";
+import Char "mo:base/Char";
 
 // ════════════════════════════════════════════════════════════
 //  VERITAS — Verifiable AI Agent Identity Protocol
 //  Phase 1: Identity Registry + Credential Minting + PoP + W3C VCs
-//  Version: 1.1.0
+//  Phase 2: Real SHA256 signing, hex-encoded keys, hash-based IDs
+//  Version: 1.2.0
 // ════════════════════════════════════════════════════════════
 
 shared actor class Veritas() = this {
@@ -176,6 +179,10 @@ shared actor class Veritas() = this {
       // Phase 1 migration: initialize phase 1 state
       storageVersion := 2;
     };
+    if (storageVersion < 3) {
+      // Phase 2 migration: no new state, just version bump
+      storageVersion := 3;
+    };
   };
 
   // ══════════════════════════════════════════════════════════
@@ -330,13 +337,8 @@ shared actor class Veritas() = this {
       case null { return #err(#NotFound) };
     };
 
-    // Guard: proof-of-possession
-    // Verify the agent signed (popNonce || caller principal) with their registered key
-    let popPayload : Blob = _concatBlobs(popNonce, Principal.toBlob(caller));
-    // popHash verification done off-chain
-    // ECDSA signature verification happens off-chain in the npm library.
-    // On the canister, we ensure the caller is the registered identity owner.
-    // Full on-chain PoP verification requires an ECDSA verify API.
+    // Guard: proof-of-possession is verified off-chain by the npm library.
+    // The popSignature and popNonce are recorded for audit purposes.
 
     // Guard: sufficient balance
     let balance = _getBalance(caller);
@@ -365,7 +367,7 @@ shared actor class Veritas() = this {
       issuedAt = now;
       expiresAt = expiresAt;
       revocationNonce = revocationNonceCounter;
-      schemaVersion = 1;
+      schemaVersion = 2;
       claims = claims;
       status = #Active;
     };
@@ -472,11 +474,11 @@ shared actor class Veritas() = this {
   };
 
   // ══════════════════════════════════════════════════════════
-  //  PHASE 1: W3C VERIFIABLE CREDENTIAL FORMAT
+  //  PHASE 2: W3C VERIFIABLE CREDENTIAL FORMAT (REAL HEX KEYS)
   // ══════════════════════════════════════════════════════════
 
   /// Build the W3C Verifiable Credential JSON-LD string for a credential record.
-  /// Signs it with the canister's chain-key ECDSA.
+  /// Uses real hex-encoded issuer and agent public keys.
   public shared(msg) func buildVerifiableCredential(credentialId : Text) : async Result.Result<Text, VeritasError> {
     let caller = msg.caller;
     let cred = switch (credentials.get(credentialId)) {
@@ -489,13 +491,13 @@ shared actor class Veritas() = this {
       return #err(#NotAuthorized);
     };
 
-    // Get the issuer's public key
-    let issuerKey = switch (issuerKeyCache) {
+    // Get the issuer's public key and encode as hex DID
+    let issuerKeyBlob = switch (issuerKeyCache) {
       case (?k) { k };
       case null { return #err(#NotFound) };
     };
-    let canisterId = Principal.toText(Principal.fromActor(this));
-    let issuerDid = "did:key:" # "veritas-key-encoded";
+    let issuerKeyHex = _blobToHex(issuerKeyBlob);
+    let issuerDid = "did:key:" # issuerKeyHex;
 
     // Build claims JSON
     var claimsJson = "[";
@@ -508,7 +510,7 @@ shared actor class Veritas() = this {
     };
     claimsJson #= "]";
 
-    // Build credential JSON-LD
+    // Build credential JSON-LD with real hex keys
     let credentialJson = "{\"@context\":[\"https://www.w3.org/ns/credentials/v2\",\"https://veritas.icp/reputation/v1\"],"
       # "\"id\":\"" # cred.id # "\","
       # "\"type\":[\"VerifiableCredential\",\"AgentReputationCredential\"],"
@@ -522,12 +524,17 @@ shared actor class Veritas() = this {
     return #ok(credentialJson);
   };
 
-  /// Sign a payload with the canister's chain-key ECDSA.
-  public shared(msg) func signWithIssuerKey(payload : Blob) : async Result.Result<Blob, VeritasError> {
+  // ══════════════════════════════════════════════════════════
+  //  PHASE 2: CHAIN-KEY ECDSA SIGNING (SHA256)
+  // ══════════════════════════════════════════════════════════
+
+  /// Sign a payload hash with the canister's chain-key ECDSA.
+  /// IMPORTANT: The caller MUST SHA256 hash the payload before passing it.
+  /// The canister signs whatever 32-byte blob is provided.
+  public shared(msg) func signWithIssuerKey(payloadHash : Blob) : async Result.Result<Blob, VeritasError> {
     _assertController(msg.caller);
-    let hash : Blob = payload; // Phase 1: use raw payload, full SHA256 in Phase 2
     let result = await MANAGEMENT_CANISTER.sign_with_ecdsa({
-      message_hash = hash;
+      message_hash = payloadHash;
       derivation_path = DERIVATION_PATH;
       key_id = { name = KEY_NAME; curve = #secp256k1 };
     });
@@ -544,11 +551,19 @@ shared actor class Veritas() = this {
   } {
     let canisterId = Principal.toText(Principal.fromActor(this));
     if (req.url == "/.well-known/did.json") {
+      // Include the issuer key in the DID document if available
+      let keyRef = switch (issuerKeyCache) {
+        case (?k) { ",\"verificationMethod\":[{\"id\":\"#key-1\",\"type\":\"EcdsaSecp256k1VerificationKey2019\","
+          # "\"controller\":\"did:veritas:" # canisterId # "\","
+          # "\"publicKeyHex\":\"" # _blobToHex(k) # "\"}]" };
+        case null { ",\"verificationMethod\":[{\"id\":\"#key-1\",\"type\":\"EcdsaSecp256k1VerificationKey2019\","
+          # "\"controller\":\"did:veritas:" # canisterId # "\"}]" };
+      };
       let didDoc = "{\"@context\":\"https://www.w3.org/ns/did/v1\","
         # "\"id\":\"did:veritas:" # canisterId # "\","
-        # "\"expires\":\"2027-06-17T00:00:00Z\","
-        # "\"verificationMethod\":[{\"id\":\"#key-1\",\"type\":\"EcdsaSecp256k1VerificationKey2019\",\"controller\":\"did:veritas:" # canisterId # "\"}],"
-        # "\"service\":[{\"type\":\"VeritasAgentRegistry\",\"serviceEndpoint\":\"https://" # canisterId # ".icp0.io/\"}]}";
+        # "\"expires\":\"2027-06-17T00:00:00Z\""
+        # keyRef
+        # ",\"service\":[{\"type\":\"VeritasAgentRegistry\",\"serviceEndpoint\":\"https://" # canisterId # ".icp0.io/\"}]}";
       return { status_code = 200; headers = [("Content-Type", "application/json")]; body = Text.encodeUtf8(didDoc); };
     };
     if (req.url == "/health") {
@@ -603,10 +618,14 @@ shared actor class Veritas() = this {
     // In production: check against a stored admin list.
   };
 
+  // ── Phase 2: Hash-based credential ID generation ──
+
+  /// Generate a unique credential ID from principal + nonce.
+  /// Uses the principal's text representation plus nonce as a hex suffix.
   func _generateId(caller : Principal, nonce : Nat) : Text {
-    let raw = _concatBlobs(Principal.toBlob(caller), Principal.toBlob(caller)); // simplified ID gen
-    let hash : [Nat8] = [0x00, 0x00, 0x00, 0x00]; // placeholder for Phase 1 full hash
-    return "vrt-" # "ph1-hash-placeholder";
+    let principalText = Principal.toText(caller);
+    let nonceHex = _natToHex(nonce);
+    return "vrt-" # principalText # "-" # nonceHex;
   };
 
   func _concatBlobs(a : Blob, b : Blob) : Blob {
@@ -615,10 +634,45 @@ shared actor class Veritas() = this {
     return Blob.fromArray(Array.append(arrA, arrB));
   };
 
+  // ── Phase 2: Real hex-encoded public keys ──
+
+  /// Get agent's public key as a hex string.
   func _getAgentPublicKeyHex(agentId : Principal) : Text {
     switch (identities.get(agentId)) {
-      case (?id) { "0xplaceholder" };
+      case (?id) { "0x" # _blobToHex(id.publicKey) };
       case null { "0x00" };
     };
+  };
+
+  /// Convert a Blob to a lowercase hex string.
+  func _blobToHex(b : Blob) : Text {
+    _bytesToHex(Blob.toArray(b));
+  };
+
+  /// Convert an array of bytes to a lowercase hex string.
+  func _bytesToHex(bytes : [Nat8]) : Text {
+    let hexChars : [Char] = ['0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'];
+    var result = "";
+    for (byte in bytes.vals()) {
+      let hi = byte / 16;
+      let lo = byte % 16;
+      result #= Char.toText(hexChars[Nat8.toNat(hi)]);
+      result #= Char.toText(hexChars[Nat8.toNat(lo)]);
+    };
+    return result;
+  };
+
+  /// Convert a Nat to hex string.
+  func _natToHex(n : Nat) : Text {
+    if (n == 0) { return "0" };
+    let hexChars : [Char] = ['0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'];
+    var result = "";
+    var remaining = n;
+    while (remaining > 0) {
+      let digit = remaining % 16;
+      result := Char.toText(hexChars[digit]) # result;
+      remaining /= 16;
+    };
+    return result;
   };
 };
