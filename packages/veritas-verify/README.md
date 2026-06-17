@@ -1,6 +1,6 @@
 # veritas-verify
 
-**Core verification library for the VERITAS identity protocol.**
+**Core verification library for the VERITAS identity protocol on ICP.**
 
 Zero-network credential verification for AI agents. Verify W3C Verifiable Credentials,
 proof-of-possession challenges, and ECDSA secp256k1 signatures — all locally, sub-ms.
@@ -16,8 +16,8 @@ npm install veritas-verify
 ```typescript
 import { generateKeypair, setIssuerKey, verifyCredential } from 'veritas-verify';
 
-// Configure the issuer key (compile-time constant from VERITAS canister)
-setIssuerKey('03abc123...');
+// Configure the issuer key (from the VERITAS canister's DID document)
+setIssuerKey('0256180048901b2dd3596ce0037066635d6c8433e620dd9718610ca430847696e3');
 
 // Verify a credential (local, no network calls)
 const result = verifyCredential(credentialJson);
