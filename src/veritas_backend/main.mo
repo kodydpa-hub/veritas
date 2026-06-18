@@ -221,8 +221,8 @@ shared actor class Veritas() = this {
   flexible var issuerKeyCache : ?Blob = null;
 
   // ── Fee Schedule (cycles) ──
-  let FEE_REGISTER : Nat = 3_000_000_000;
-  let FEE_CREDENTIAL : Nat = 35_000_000_000;
+  let FEE_REGISTER : Nat = 0; // Free — agents register at no cost
+  let FEE_CREDENTIAL : Nat = 0; // Free for first year to drive adoption
   let FEE_RENEW : Nat = 3_000_000_000;
   let MINIMUM_DEPOSIT : Nat = 22_000_000_000;
 
@@ -258,10 +258,11 @@ shared actor class Veritas() = this {
   ];
   flexible var tierPrices : [(Text, Nat)] = [
     // Monthly subscription prices in cycles
-    // Year 1 premium: ~$500, ~$2K, ~$5K/month
-    ("Starter", 1_111_111_111_111),  // ~$500/mo
-    ("Pro", 4_444_444_444_444),      // ~$2K/mo
-    ("Enterprise", 11_111_111_111_111), // ~$5K/mo
+    // Year 1: Free (drive adoption)
+    // Year 2: Admin calls setTierPrice to increase
+    ("Starter", 0),
+    ("Pro", 0),
+    ("Enterprise", 0),
   ];
   flexible var scoringConfig : [(Text, Float)] = [
     ("experience_factor", 100.0),
@@ -456,13 +457,16 @@ shared actor class Veritas() = this {
     let newBalance = _getBalance(caller) + accepted;
     balances.put(caller, newBalance);
 
-    // Auto-assign best tier based on new balance
-    // Check tiers from most expensive to cheapest
+    // Auto-assign best tier based on new balance (if pricing is set)
     var bestTier = "Free";
-    // Sort tier prices descending by price
-    let sortedPrices = [("Enterprise", 11_111_111_111_111), ("Pro", 4_444_444_444_444), ("Starter", 1_111_111_111_111)];
-    for ((t, p) in sortedPrices.vals()) {
-      if (newBalance >= p) { bestTier := t };
+    // Check tiers from most expensive to cheapest, only if price > 0
+    let sortedTiers = ["Enterprise", "Pro", "Starter"];
+    for (t in sortedTiers.vals()) {
+      for ((tierName, price) in tierPrices.vals()) {
+        if (tierName == t and price > 0 and newBalance >= price) {
+          bestTier := t;
+        };
+      };
     };
     if (bestTier != "Free") {
       let todayKey = _getTodayKey();

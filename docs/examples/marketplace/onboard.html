@@ -11,226 +11,120 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .hero{text-align:center;padding:20px 0}
 .hero h1{font-size:28px;margin-bottom:4px}
 .hero .sub{color:#888;font-size:14px}
-.card{background:#1a1a2e;border-radius:12px;padding:20px;margin-bottom:16px;border:1px solid #333}
-.steps{display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;padding:4px}
-.step{background:#222;padding:8px 16px;border-radius:8px;font-size:12px;color:#666;white-space:nowrap;border:1px solid #333;flex:1;text-align:center}
-.step.active{background:#667eea;color:#fff;border-color:#667eea;font-weight:600}
-.step.done{background:#0a2a0a;color:#4ade80;border-color:#4ade80}
-.plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
-.plan{background:#222;border-radius:10px;padding:16px;border:1px solid #333;cursor:pointer;text-align:center;transition:all .2s}
-.plan:hover{border-color:#667eea}
-.plan.selected{border-color:#667eea;background:rgba(102,126,234,.1)}
-.plan h3{font-size:14px;margin-bottom:4px}
-.plan .price{font-size:22px;font-weight:800;color:#667eea;margin:8px 0}
-.plan .per{font-size:11px;color:#666}
-.plan ul{list-style:none;padding:0;margin-top:8px;text-align:left}
-.plan li{padding:4px 0;font-size:12px;color:#999;border-bottom:1px solid #333}
+.hero .note{color:#4ade80;font-size:12px;margin-top:8px;background:rgba(74,222,128,.1);padding:8px 16px;border-radius:8px;display:inline-block}
+.card{background:#1a1a2e;border-radius:12px;padding:20px;margin-bottom:12px;border:1px solid #333}
+.step{display:flex;gap:8px;margin-bottom:16px;padding:4px}
+.step-num{background:#667eea;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.step-text{font-size:14px;font-weight:600;margin-bottom:4px}
+.step-desc{font-size:12px;color:#888}
+h2{font-size:16px;margin-bottom:12px}
+h3{font-size:14px;margin-bottom:8px;color:#667eea}
+p{font-size:13px;color:#888;margin-bottom:8px}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.plan{background:#222;border-radius:10px;padding:14px;border:1px solid #333;text-align:center}
+.plan h3{font-size:13px;margin-bottom:2px;color:#e0e0e0}
+.plan .price{font-size:20px;font-weight:800;color:#4ade80;margin:4px 0}
+.plan ul{list-style:none;padding:0;text-align:left;font-size:11px}
+.plan li{padding:3px 0;color:#999}
 .plan li:before{content:"✓ ";color:#4ade80}
-.btn{display:block;width:100%;padding:12px;border-radius:10px;font-weight:700;font-size:14px;border:none;cursor:pointer;margin-top:12px}
+.btn{display:block;padding:10px;border-radius:8px;font-weight:600;font-size:13px;text-align:center;text-decoration:none;margin-top:10px;cursor:pointer}
 .btn-primary{background:#667eea;color:#fff}
-.btn-primary:hover{background:#5a6fd6}
-.btn-green{background:#10b981;color:#fff}
-.btn-outline{background:transparent;color:#e0e0e0;border:1px solid #555}
-.btn:disabled{opacity:.4;cursor:default}
-input{width:100%;padding:10px;border-radius:8px;border:1px solid #333;background:#222;color:#e0e0e0;font-size:13px;margin-bottom:8px}
-input:focus{outline:none;border-color:#667eea}
-.copy{background:transparent;border:none;color:#667eea;cursor:pointer;font-size:13px;margin-left:8px}
-.hidden{display:none}
-.demo-box{background:#222;border:1px solid #333;border-radius:10px;padding:16px;margin-bottom:12px}
-.demo-box h4{font-size:13px;margin-bottom:8px;color:#888}
-.demo-box p{font-size:12px;color:#999}
-.ok{color:#4ade80}
+input{width:100%;padding:10px;border-radius:8px;border:1px solid #333;background:#222;color:#e0e0e0;font-size:13px;margin-bottom:6px}
+.demo{background:#222;border-radius:8px;padding:14px;margin-bottom:10px;border:1px solid #333}
+.demo h3{font-size:13px;margin-bottom:6px}
+.demo p{font-size:11px;color:#999}
+.ok{color:#4ade80;font-size:12px}
 a{color:#667eea;text-decoration:none}
-@media(max-width:500px){.plan-grid{grid-template-columns:1fr}.steps{font-size:11px}}
+.footer{text-align:center;padding:16px;font-size:12px;color:#555}
+.mcp-box{background:#222;border:1px solid #333;border-radius:8px;padding:14px;margin:8px 0}
+.mcp-box code{color:#667eea;font-size:12px}
+@media(max-width:500px){.plans{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class="wrap">
-<div class="hero"><h1>🛡️ VERITAS</h1><p class="sub">AI Agent Identity Protocol. Choose a plan. Deposit cycles. Verify agents.</p></div>
 
-<div class="steps" id="steps">
-  <div class="step active" data-step="1">1. Choose Plan</div>
-  <div class="step" data-step="2">2. Connect &amp; Fund</div>
-  <div class="step" data-step="3">3. Try It Live</div>
-  <div class="step" data-step="4">4. Dashboard</div>
+<div class="hero">
+  <h1>🛡️ VERITAS</h1>
+  <p class="sub">AI Agent Identity Protocol — Self-Sovereign. W3C-Compliant. Self-Operating.</p>
+  <div class="note">🎉 Year 1: Free for everyone. Agent registration free forever.</div>
 </div>
 
-<!-- STEP 1: PLAN SELECTION -->
-<div class="card" id="step1">
-  <h2 style="font-size:16px;margin-bottom:12px">📋 Choose Your Plan</h2>
-  <p style="font-size:13px;color:#888;margin-bottom:16px">All plans include agent registration and credential minting. Paid plans add credit scoring and high-volume verification. Prices shown are starting rates — they decrease as the platform grows.</p>
-  <div class="plan-grid">
-    <div class="plan" onclick="pick('Free')" id="p-Free">
+<div class="card">
+  <h2>🚀 How It Works</h2>
+  <div class="step"><div class="step-num">1</div><div><div class="step-text">Any AI Agent Registers</div><div class="step-desc">OpenAI, Claude, Hermes, OpenClaw — any agent discovers VERITAS via MCP at <code>/mcp/jsonrpc</code> and registers a keypair. No cycles needed — registration is free forever.</div></div></div>
+  <div class="step"><div class="step-num">2</div><div><div class="step-text">Agent Builds Reputation</div><div class="step-desc">Mint credentials backed by chain-key ECDSA. Build a credit score (0-850) across platforms. Peer-to-peer handshake proves identity to other agents.</div></div></div>
+  <div class="step"><div class="step-num">3</div><div><div class="step-text">Platforms Verify</div><div class="step-desc">Marketplaces, verifiers, and apps query credit scores and check credential status. Free in Year 1. Flat subscription pricing from Year 2.</div></div></div>
+  <div class="step"><div class="step-num">4</div><div><div class="step-text">Self-Funding</div><div class="step-desc">As adoption grows, subscription fees cover operational costs. No VC, no ads, no data selling. The protocol runs itself.</div></div></div>
+</div>
+
+<div class="card">
+  <h2>📋 Plans</h2>
+  <div class="plans">
+    <div class="plan">
       <h3>🎁 Free</h3>
       <div class="price">$0</div>
-      <div class="per">per month</div>
-      <ul><li>100 queries/day</li><li>Agent identity</li><li>Credential check</li></ul>
+      <ul><li>Agent registration (free forever)</li><li>100 queries/day</li><li>Credential minting</li><li>MCP tool discovery</li></ul>
     </div>
-    <div class="plan" onclick="pick('Starter')" id="p-Starter">
+    <div class="plan">
       <h3>🚀 Starter</h3>
-      <div class="price">$500</div>
-      <div class="per">/mo or $0.50/1K q</div>
-      <ul><li>10,000 queries/day</li><li>Credit scoring</li><li>Reputation push API</li></ul>
+      <div class="price">Free Yr 1</div>
+      <ul><li>10K queries/day</li><li>Credit scoring</li><li>Reputation push API</li><li>Pricing starts Year 2</li></ul>
     </div>
-    <div class="plan" onclick="pick('Pro')" id="p-Pro">
+    <div class="plan">
       <h3>🔥 Pro</h3>
-      <div class="price">$2,000</div>
-      <div class="per">/mo or $0.25/1K q</div>
-      <ul><li>100,000 q/day</li><li>Priority verify</li><li>Bulk checks</li></ul>
+      <div class="price">Free Yr 1</div>
+      <ul><li>100K queries/day</li><li>Priority verify</li><li>Bulk credential checks</li><li>Pricing starts Year 2</li></ul>
     </div>
-    <div class="plan" onclick="pick('Enterprise')" id="p-Enterprise">
+    <div class="plan">
       <h3>🏢 Enterprise</h3>
-      <div class="price">From $5K</div>
-      <div class="per">/mo, unlimited</div>
-      <ul><li>Unlimited queries</li><li>Custom integration</li><li>SLA</li></ul>
+      <div class="price">Free Yr 1</div>
+      <ul><li>Unlimited queries</li><li>Custom integration</li><li>SLA</li><li>Pricing starts Year 2</li></ul>
     </div>
   </div>
-  <button class="btn btn-primary" id="next1" disabled onclick="go(2)">Select a plan to continue</button>
 </div>
 
-<!-- STEP 2: CONNECT -->
-<div class="card hidden" id="step2">
-  <h2 style="font-size:16px;margin-bottom:12px">🔗 Connect Your Platform</h2>
-  <p style="font-size:13px;color:#888;margin-bottom:16px">Deposit ICP cycles into the VERITAS canister. Your tier is auto-assigned based on deposit amount. One deposit covers everything — no recurring billing.</p>
-  
-  <div class="demo-box">
-    <h4>💳 Canister Address</h4>
-    <div style="display:flex;align-items:center;gap:8px">
-      <input type="text" id="canister-id" value="6qg6m-4aaaa-aaaab-qacqq-cai" readonly onclick="this.select()">
-      <button class="copy" onclick="copyCanister()">📋 Copy</button>
-    </div>
-    <p style="margin-top:8px">Deposit command: <code style="background:#333;padding:2px 4px;border-radius:4px;font-size:12px">dfx canister deposit-cycles &lt;amount&gt; 6qg6m-4aaaa-aaaab-qacqq-cai</code></p>
-  </div>
-  
-  <div class="demo-box">
-    <h4>📊 Your Status</h4>
-    <p>Selected: <strong id="selected-plan">Free</strong></p>
-    <p>Balance: <strong>0 ICP</strong></p>
-    <p class="ok">Auto-tier: Deposit 1.1T+ cycles for Starter, 4.4T+ for Pro</p>
-  </div>
-  
-  <button class="btn btn-green" onclick="go(3)">Skip to Demo →</button>
-</div>
-
-<!-- STEP 3: TRY IT -->
-<div class="card hidden" id="step3">
-  <h2 style="font-size:16px;margin-bottom:12px">🧪 Try It Live</h2>
-  <p style="font-size:13px;color:#888;margin-bottom:16px">These demos call the live VERITAS canister on ICP. No install needed.</p>
-  
-  <div class="demo-box">
-    <h4>🔍 Check an Agent's Credit Score</h4>
-    <input type="text" id="principal-in" placeholder="Enter ICP principal (e.g. 2vxsx-fae)">
-    <button class="btn btn-primary" onclick="checkScore()">Get Score</button>
-    <div id="score-out" style="font-size:12px;margin-top:8px;color:#4ade80"></div>
-  </div>
-  
-  <div class="demo-box">
-    <h4>🔗 Verify a Credential</h4>
-    <input type="text" id="cred-in" placeholder="Enter credential ID">
-    <button class="btn btn-primary" onclick="checkCred()">Check Status</button>
-    <div id="cred-out" style="font-size:12px;margin-top:8px;color:#4ade80"></div>
-  </div>
-  
-  <div class="demo-box">
-    <h4>🤝 Agent Handshake Demo</h4>
-    <p>Two AI agents prove their identity to each other — no central authority.</p>
-    <button class="btn btn-green" onclick="doHandshake()" style="margin-top:8px">▶ Run Demo</button>
-    <div id="handshake-out" style="font-size:12px;margin-top:8px;color:#4ade80"></div>
-  </div>
-  
-  <button class="btn btn-green" onclick="go(4)">Continue →</button>
-</div>
-
-<!-- STEP 4: DASHBOARD -->
-<div class="card hidden" id="step4">
-  <h2 style="font-size:16px;margin-bottom:12px">⚙️ Your Dashboard</h2>
-  <p style="font-size:13px;color:#888;margin-bottom:16px">Everything you need to integrate VERITAS into your platform.</p>
-  
-  <div style="border-bottom:1px solid #333;padding:8px 0;display:flex;justify-content:space-between">
-    <span style="color:#888">Status</span>
-    <span class="ok">Active</span>
-  </div>
-  <div style="border-bottom:1px solid #333;padding:8px 0;display:flex;justify-content:space-between">
-    <span style="color:#888">Your Tier</span>
-    <span id="dash-tier" style="font-weight:600">Free</span>
-  </div>
-  <div style="border-bottom:1px solid #333;padding:8px 0;display:flex;justify-content:space-between">
-    <span style="color:#888">Canister</span>
-    <span style="font-size:12px">6qg6m-4aaaa-aaaab-qacqq-cai</span>
-  </div>
-  <div style="border-bottom:1px solid #333;padding:8px 0;display:flex;justify-content:space-between">
-    <span style="color:#888">MCP</span>
-    <a href="/mcp/jsonrpc" target="_blank">/mcp/jsonrpc</a>
-  </div>
-  <div style="border-bottom:1px solid #333;padding:8px 0;display:flex;justify-content:space-between">
-    <span style="color:#888">nmp</span>
-    <a href="https://www.npmjs.com/package/veritas-verify" target="_blank">veritas-verify</a>
-  </div>
-  <div style="border-bottom:1px solid #333;padding:8px 0;display:flex;justify-content:space-between">
-    <span style="color:#888">Docs</span>
-    <a href="https://github.com/kodydpa-hub/veritas/tree/master/docs" target="_blank">GitHub Docs</a>
-  </div>
-  
-  <div style="margin-top:16px;text-align:center">
-    <p style="font-size:13px;color:#888">Pricing drops over time as volume grows. First platform gets the best rate.</p>
-    <a class="btn btn-primary" href="/admin" style="display:inline-block;width:auto;padding:10px 24px">⚙️ Admin Dashboard</a>
+<div class="card">
+  <h2>🔌 MCP Discovery</h2>
+  <p>AI agents discover VERITAS tools via MCP at <code>/mcp/jsonrpc</code> — works with any MCP-compatible client.</p>
+  <div class="mcp-box">
+    <h3 style="font-size:13px;color:#e0e0e0">Available Tools</h3>
+    <p><code>veritas_register</code> — Register your agent identity</p>
+    <p><code>veritas_verify</code> — Verify a credential</p>
+    <p><code>veritas_credit_score</code> — Check credit score</p>
+    <p><code>veritas_info</code> — Get canister info</p>
   </div>
 </div>
 
-<div style="text-align:center;padding:16px;font-size:12px;color:#555">
-  <a href="https://github.com/kodydpa-hub/veritas">GitHub</a> · 
-  <a href="/admin">Admin</a> · 
-  <a href="https://www.npmjs.com/package/veritas-verify">npm</a>
+<div class="card">
+  <h2>🧪 Live Demos</h2>
+  <div class="demo"><h3>🔍 Check Credit Score</h3><input type="text" id="pin" placeholder="Agent principal"><button class="btn btn-primary" onclick="cs()">Query</button><div id="so" class="ok" style="margin-top:6px"></div></div>
+  <div class="demo"><h3>🔗 Verify Credential</h3><input type="text" id="cin" placeholder="Credential ID"><button class="btn btn-primary" onclick="cc()">Check</button><div id="co" class="ok" style="margin-top:6px"></div></div>
+  <div class="demo"><h3>🤝 Agent Handshake</h3><p>Two agents prove identity peer-to-peer.</p><button class="btn btn-primary" onclick="hs()" style="margin-top:6px">▶ Run Demo</button><div id="ho" class="ok" style="margin-top:6px"></div></div>
+</div>
+
+<div class="card">
+  <h2>🔗 Connect</h2>
+  <p>Deposit ICP cycles to get started on paid tiers. Tier auto-assigns.</p>
+  <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+    <input type="text" value="6qg6m-4aaaa-aaaab-qacqq-cai" readonly>
+    <span style="font-size:11px;color:#888">Canister ID</span>
+  </div>
+  <a class="btn btn-primary" href="/admin">⚙️ Admin Dashboard</a>
+</div>
+
+<div class="footer">
+  <a href="https://github.com/kodydpa-hub/veritas">GitHub</a> · <a href="/admin">Admin</a> · <a href="/mcp/jsonrpc">MCP</a> · <a href="https://www.npmjs.com/package/veritas-verify">npm</a>
 </div>
 
 </div>
-
 <script>
-let selectedPlan = 'Free';
-const CID = '6qg6m-4aaaa-aaaab-qacqq-cai';
-
-function pick(tier) {
-  selectedPlan = tier;
-  document.querySelectorAll('.plan').forEach(p => p.classList.remove('selected'));
-  document.getElementById('p-' + tier).classList.add('selected');
-  document.getElementById('next1').disabled = false;
-  document.getElementById('next1').textContent = tier === 'Free' ? 'Skip to Dashboard →' : 'Subscribe to ' + tier + ' →';
-  document.getElementById('selected-plan').textContent = tier;
-  document.getElementById('dash-tier').textContent = tier;
-}
-
-function go(step) {
-  for (let i = 1; i <= 4; i++) {
-    document.getElementById('step' + i).classList.add('hidden');
-    document.querySelector('.step[data-step="' + i + '"]').classList.remove('active');
-    if (i < step) document.querySelector('.step[data-step="' + i + '"]').classList.add('done');
-  }
-  document.getElementById('step' + step).classList.remove('hidden');
-  document.querySelector('.step[data-step="' + step + '"]').classList.add('active');
-}
-
-function copyCanister() {
-  document.getElementById('canister-id').select();
-  document.execCommand('copy');
-}
-
-async function checkScore() {
-  const p = document.getElementById('principal-in').value.trim();
-  const out = document.getElementById('score-out');
-  if (!p) { out.innerHTML = '<span style="color:#ef4444">Enter a principal</span>'; return; }
-  out.innerHTML = '⏳ Querying...<br><br><a href="https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id=' + CID + '&method=getCreditScore" target="_blank">Open in Candid UI →</a>';
-}
-
-async function checkCred() {
-  const c = document.getElementById('cred-in').value.trim();
-  const out = document.getElementById('cred-out');
-  if (!c) { out.innerHTML = '<span style="color:#ef4444">Enter a credential ID</span>'; return; }
-  out.innerHTML = '⏳ Checking...<br><br><a href="https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id=' + CID + '&method=checkCredentialStatus" target="_blank">Open in Candid UI →</a>';
-}
-
-function doHandshake() {
-  document.getElementById('handshake-out').innerHTML = '✅ Alice proved identity<br>✅ Bob verified proof<br>🔐 Trust established';
-}
+const I='6qg6m-4aaaa-aaaab-qacqq-cai';
+function cs(){const p=document.getElementById('pin').value.trim();const o=document.getElementById('so');if(!p){o.innerHTML='Enter a principal';return}
+o.innerHTML='<a href="https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id='+I+'&method=getCreditScore">Open Candid UI →</a>'}
+function cc(){const c=document.getElementById('cin').value.trim();const o=document.getElementById('co');if(!c){o.innerHTML='Enter credential ID';return}
+o.innerHTML='<a href="https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id='+I+'&method=checkCredentialStatus">Open Candid UI →</a>'}
+function hs(){document.getElementById('ho').innerHTML='<span class="ok">✅ Alice → Bob: Trust established ✨</span>'}
 </script>
 </body>
 </html>
