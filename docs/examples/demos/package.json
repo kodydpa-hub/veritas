@@ -1,0 +1,16 @@
+{
+  "name": "demos",
+  "version": "1.0.0",
+  "description": "",
+  "main": "agent-handshake.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "veritas-agent": "file:../../../packages/veritas-agent",
+    "veritas-verify": "file:../../../packages/veritas-verify"
+  }
+}

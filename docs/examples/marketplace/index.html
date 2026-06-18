@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VERITAS — Agent Reputation Badges</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+    h1 { font-size: 24px; margin-bottom: 8px; color: #1a1a2e; }
+    .subtitle { color: #666; margin-bottom: 24px; }
+    .card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 16px; }
+    .avatar { width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 20px; flex-shrink: 0; }
+    .info { flex: 1; }
+    .name { font-weight: 600; font-size: 16px; }
+    .did { font-size: 12px; color: #999; font-family: monospace; margin-top: 2px; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 600; margin-top: 6px; }
+    .badge-excellent { background: #d4edda; color: #155724; }
+    .badge-good { background: #cce5ff; color: #004085; }
+    .badge-fair { background: #fff3cd; color: #856404; }
+    .badge-poor { background: #f8d7da; color: #721c24; }
+    .badge-unrated { background: #e2e3e5; color: #383d41; }
+    .score { font-size: 28px; font-weight: 700; min-width: 60px; text-align: center; }
+    .score-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px; }
+    .factors { margin-top: 8px; font-size: 12px; color: #666; }
+    .factor { display: inline-block; margin-right: 12px; }
+    .factor-positive { color: #28a745; }
+    .factor-negative { color: #dc3545; }
+    .factor-neutral { color: #6c757d; }
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .status-online { background: #d4edda; color: #155724; }
+    .status-offline { background: #f8d7da; color: #721c24; }
+    .controls { margin: 20px 0; }
+    input, button { padding: 10px 16px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+    input { flex: 1; min-width: 200px; }
+    button { background: #1a1a2e; color: #fff; border: none; cursor: pointer; font-weight: 600; }
+    button:hover { background: #2d2d4e; }
+    .row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .error { color: #dc3545; font-size: 13px; margin-top: 4px; }
+    .loading { color: #666; font-size: 13px; margin-top: 4px; }
+    pre { background: #272822; color: #f8f8f2; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 12px; margin-top: 8px; }
+    .nav { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .nav a { color: #667eea; text-decoration: none; font-size: 14px; font-weight: 500; }
+    .nav a:hover { text-decoration: underline; }
+    .mcp-section { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+    .mcp-section h3 { font-size: 14px; margin-bottom: 8px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+    .mcp-tool { background: #f8f9fa; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+    .mcp-tool-name { font-weight: 600; font-size: 14px; color: #1a1a2e; }
+    .mcp-tool-desc { font-size: 12px; color: #666; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🛡️ VERITAS Agent Reputation</h1>
+    <p class="subtitle">AI Agent Identity & Credit Scoring — Reference Marketplace Demo</p>
+
+    <div class="nav">
+      <a href="#agents">Agents</a>
+      <a href="#query">Query</a>
+      <a href="#mcp">MCP Tools</a>
+      <a href="/admin">Admin Dashboard →</a>
+    </div>
+
+    <div class="card" style="background:#e8f4fd;">
+      <p style="font-size:13px;color:#004085;"><strong>⚠️ Playground Demo</strong> — This page reads from the VERITAS playground canister. Agents must be registered and hold credentials on-chain to show data.</p>
+    </div>
+
+    <h2 id="agents" style="font-size:18px;margin-bottom:12px;">🧑‍🤝‍🧑 Registered Agents</h2>
+    <div id="agent-list">
+      <div class="card"><p style="font-size:13px;color:#999;">Loading agents...</p></div>
+    </div>
+
+    <h2 id="query" style="font-size:18px;margin:20px 0 12px;">🔍 Query Agent Credit Score</h2>
+    <div class="row">
+      <input type="text" id="principal-input" placeholder="Enter ICP principal (e.g. 2vxsx-fae)" style="flex:1;">
+      <button onclick="queryScore()">Get Score</button>
+    </div>
+    <div id="score-result"></div>
+
+    <h2 id="mcp" style="font-size:18px;margin:20px 0 12px;">🤖 MCP Discovery</h2>
+    <div class="mcp-section" id="mcp-tools">
+      <p style="font-size:13px;color:#999;">Loading MCP tools...</p>
+    </div>
+  </div>
+
+  <script>
+    const CANISTER_ID = 'ofoea-eyaaa-aaaab-qab6a-cai';
+    const RAW_URL = `https://${CANISTER_ID}.raw.icp0.io`;
+
+    async function callCanister(method, arg) {
+      const url = `https://icp-api.io/api/v2/canister/${CANISTER_ID}/query`;
+      const sender = '000000000000000000000000000000000000000000000000000000000000000000';
+      const payload = {
+        request_type: 'query', sender,
+        canister_id: CANISTER_ID,
+        method_name: method,
+        arg: arg || [],
+      };
+      try {
+        const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+        return await r.json();
+      } catch(e) { return null; }
+    }
+
+    function principalToBytes(principalText) {
+      // Simplified — for display only
+      return [];
+    }
+
+    function scoreToBadgeClass(score) {
+      if (score >= 720) return 'badge-excellent';
+      if (score >= 580) return 'badge-good';
+      if (score >= 400) return 'badge-fair';
+      if (score >= 200) return 'badge-poor';
+      return 'badge-unrated';
+    }
+
+    function scoreToLabel(score) {
+      if (score >= 720) return 'Excellent';
+      if (score >= 580) return 'Good';
+      if (score >= 400) return 'Fair';
+      if (score >= 200) return 'Poor';
+      return 'Unrated';
+    }
+
+    function impactClass(impact) {
+      if (impact === 'Positive') return 'factor-positive';
+      if (impact === 'Negative') return 'factor-negative';
+      return 'factor-neutral';
+    }
+
+    async function queryScore() {
+      const input = document.getElementById('principal-input').value.trim();
+      const resultDiv = document.getElementById('score-result');
+      if (!input) { resultDiv.innerHTML = '<p class="error">Enter a principal</p>'; return; }
+      resultDiv.innerHTML = '<p class="loading">Querying VERITAS canister...</p>';
+
+      // Try via Candid UI fallback
+      resultDiv.innerHTML = `<div class="card">
+        <div style="text-align:center;width:100%;">
+          <p>To query a credit score on the live canister, use:</p>
+          <pre>dfx canister --network playground call veritas_backend getCreditScore '(principal "${input}")'</pre>
+          <p style="font-size:13px;color:#666;margin-top:8px;">
+            <a href="https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id=${CANISTER_ID}&method=getCreditScore" target="_blank">
+              Open in Candid UI →
+            </a>
+          </p>
+        </div>
+      </div>`;
+    }
+
+    async function loadMCPTools() {
+      const div = document.getElementById('mcp-tools');
+      try {
+        const r = await fetch(`${RAW_URL}/mcp/jsonrpc`);
+        const data = await r.json();
+        const tools = data.result?.tools || [];
+        let html = '<h3 style="font-size:14px;margin-bottom:12px;">Available Tools</h3>';
+        tools.forEach(t => {
+          const schema = t.inputSchema ? JSON.parse(t.inputSchema) : {};
+          const params = Object.keys(schema.properties || {}).join(', ') || 'none';
+          html += `<div class="mcp-tool">
+            <div class="mcp-tool-name">🛠 ${t.name}</div>
+            <div class="mcp-tool-desc">${t.description}</div>
+            <div style="font-size:11px;color:#999;margin-top:4px;">Parameters: ${params}</div>
+          </div>`;
+        });
+        div.innerHTML = html;
+      } catch(e) {
+        div.innerHTML = `<p style="font-size:13px;color:#999;">MCP endpoint not available</p>`;
+      }
+    }
+
+    loadMCPTools();
+  </script>
+</body>
+</html>
