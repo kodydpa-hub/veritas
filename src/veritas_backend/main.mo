@@ -1456,46 +1456,30 @@ shared actor class Veritas() = this {
     };
     
     if (req.url == "/admin" or req.url == "/admin/") {
-      let statsInfo = "";
-      let sourcesHtml = "";
-      // Build a simple admin dashboard HTML
-      let html = "<!DOCTYPE html><html lang=\"en\"><head>"
-        # "<meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\">"
-        # "<title>VERITAS Admin</title>"
-        # "<style>body{font-family:sans-serif;max-width:960px;margin:0 auto;padding:20px;background:#f5f5f5}"
-        # "h1{color:#1a1a2e}.card{background:#fff;border-radius:8px;padding:16px;margin:12px 0;box-shadow:0 1px 3px rgba(0,0,0,0.1)}"
-        # ".badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold}"
-        # ".badge-green{background:#4caf50;color:#fff}.badge-red{background:#f44336;color:#fff}.badge-yellow{background:#ff9800;color:#fff}"
-        # "table{width:100%;border-collapse:collapse}th,td{padding:8px;text-align:left;border-bottom:1px solid #ddd}"
-        # "th{background:#1a1a2e;color:#fff}tr:hover{background:#f1f1f1}"
-        # ".btn{display:inline-block;padding:8px 16px;border-radius:4px;text-decoration:none;color:#fff;margin:4px}"
-        # ".btn-green{background:#4caf50}.btn-red{background:#f44336}.btn-blue{background:#2196f3}"
-        # "pre{background:#272822;color:#f8f8f2;padding:12px;border-radius:4px;overflow:auto}"
-        # "</style></head><body>"
-        # "<h1>🔐 VERITAS Admin</h1>"
-        # "<div class=\"card\"><h2>📊 Stats</h2>"
-        # "<pre>Canister ID: " # canisterId # "</pre>"
-        # "<pre>Storage v6 | Agents: " # debug_show(totalAgentsRegistered)
-        # " | Credentials: " # debug_show(totalCredentialsIssued)
-        # " | Fees: " # debug_show(totalFeesCollected) # " cycles</pre>"
-        # "</div>"
-        # "<div class=\"card\"><h2>⛓️ Emergency Controls</h2>"
-        # "<p>Status: " # (if (paused) { "<span class=\"badge badge-red\">PAUSED</span>" } else { "<span class=\"badge badge-green\">ACTIVE</span>" }) # "</p>"
-        # "</div>"
-        # "<div class=\"card\"><h2>📋 API Tiers</h2><table><tr><th>Tier</th><th>Daily Limit</th></tr>";
-      
-      var tiersHtml = html;
-      for (tc in scoreTierConfig.vals()) {
-        let limitDisplay : Text = if (tc.maxDaily == 0) { "Unlimited" } else { debug_show(tc.maxDaily) };
-        tiersHtml #= "<tr><td>" # tc.tier # "</td><td>" # limitDisplay # "</td></tr>";
+      return {
+        status_code = 200;
+        headers = [("Content-Type", "text/html; charset=utf-8")];
+        body = Text.encodeUtf8(
+          "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\"><title>VERITAS Admin</title>"
+          # "<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Inter,sans-serif;background:#f9f9f9;color:#1a1a1a;line-height:1.6;padding:24px}.wrap{max-width:700px;margin:0 auto}h1{font-size:22px;font-weight:600;margin-bottom:4px;letter-spacing:-.5px}.sub{color:#6b6b6b;font-size:13px;margin-bottom:20px}.card{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:20px;margin-bottom:12px}h2{font-size:12px;font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;color:#6b6b6b}p{font-size:13px;color:#6b6b6b;margin-bottom:6px}code{background:#eee;padding:2px 6px;border-radius:4px;font-size:12px}a{color:#4361ee;text-decoration:none}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;padding:8px 10px;border-bottom:2px solid #1a1a1a;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#6b6b6b}td{padding:8px 10px;border-bottom:1px solid #e0e0e0}</style></head><body><div class=\"wrap\"><h1>VERITAS</h1><p class=\"sub\">Canister: 2tvx6-uqaaa-aaaab-qaclq-cai</p>"
+          # "<div class=\"card\"><h2>Stats</h2>"
+          # "<p>Agents: " # debug_show(totalAgentsRegistered) # "</p>"
+          # "<p>Credentials: " # debug_show(totalCredentialsIssued) # "</p>"
+          # "<p>Fees collected: " # debug_show(totalFeesCollected) # " cycles</p>"
+          # "<p>Storage: v" # debug_show(storageVersion) # "</p>"
+          # "<p>Status: <strong>" # (if (paused) { "Paused" } else { "Active" }) # "</strong></p>"
+          # "</div>"
+          # "<div class=\"card\"><h2>API Tiers</h2><table><tr><th>Tier</th><th>Daily limit</th></tr>"
+          # "<tr><td>Free</td><td>100</td></tr>"
+          # "<tr><td>Starter</td><td>10,000</td></tr>"
+          # "<tr><td>Pro</td><td>100,000</td></tr>"
+          # "<tr><td>Enterprise</td><td>Unlimited</td></tr>"
+          # "</table></div>"
+          # "<div class=\"card\"><h2>Sources</h2><p>Register via: <code>registerSource(sourceId, name, endpoint)</code></p></div>"
+          # "<div class=\"card\" style=\"text-align:center\"><p><a href=\"/docs\">Home</a> &middot; <a href=\"/mcp\">MCP</a> &middot; <a href=\"/api-docs\">API</a></p></div>"
+          # "</div></body></html>"
+        );
       };
-      tiersHtml #= "</table></div>";
-      
-      tiersHtml #= "<div class=\"card\"><h2>🌐 Sources</h2><p>Register sources via dfx: <code>dfx canister call veritas_backend registerSource</code></p></div>";
-      tiersHtml #= "<div class=\"card\"><h2>📖 Documentation</h2><p>View the <a href=\"/docs\" style=\"color:#667eea\">quick start guide</a> or full <a href=\"https://github.com/kodydpa-hub/veritas/tree/master/docs/guides/INTEGRATION.md\" style=\"color:#667eea\">integration docs</a> on GitHub.</p></div>";
-      tiersHtml #= "</body></html>";
-      
-      return { status_code = 200; headers = [("Content-Type", "text/html; charset=utf-8")]; body = Text.encodeUtf8(tiersHtml); };
     };
 
     return { status_code = 404; headers = [("Content-Type", "text/plain")]; body = Text.encodeUtf8("Not found"); };
