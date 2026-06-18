@@ -71,7 +71,7 @@ test('getStats includes storageVersion 6', () => {
 
 test('Admin dashboard returns HTML at /admin', () => {
   const result = execSync(
-    `curl -s "https://ofoea-eyaaa-aaaab-qab6a-cai.raw.icp0.io/admin" 2>/dev/null`,
+    `curl -s "https://6qg6m-4aaaa-aaaab-qacqq-cai.raw.icp0.io/admin" 2>/dev/null`,
     { encoding: 'utf-8', timeout: 10000 }
   );
   assert.ok(result.includes('VERITAS Admin'), 'Should return admin HTML');
