@@ -252,9 +252,9 @@ shared actor class Veritas() = this {
   );
   flexible var scoreTierConfig : [ScoreTierConfig] = [
     { tier = "Free"; maxDaily = 100; perCallCycles = 0 },
-    { tier = "Starter"; maxDaily = 10_000; perCallCycles = 100_000_000 },
-    { tier = "Pro"; maxDaily = 100_000; perCallCycles = 50_000_000 },
-    { tier = "Enterprise"; maxDaily = 0; perCallCycles = 10_000_000 }, // 0 = unlimited
+    { tier = "Starter"; maxDaily = 10_000; perCallCycles = 0 },
+    { tier = "Pro"; maxDaily = 100_000; perCallCycles = 0 },
+    { tier = "Enterprise"; maxDaily = 0; perCallCycles = 0 }, // 0 = unlimited
   ];
   flexible var tierPrices : [(Text, Nat)] = [
     // Monthly subscription prices in cycles
