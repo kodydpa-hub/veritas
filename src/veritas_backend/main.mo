@@ -1397,8 +1397,50 @@ shared actor class Veritas() = this {
     };
 
     if (req.url == "/docs" or req.url == "/docs/") {
-      // Redirect to GitHub-hosted interactive onboarding guide
-      return { status_code = 302; headers = [("Location", "https://github.com/kodydpa-hub/veritas/blob/master/docs/examples/marketplace/onboard.html")]; body = Text.encodeUtf8(""); };
+      let page = "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\"><title>VERITAS - AI Agent Identity on ICP</title>"
+        # "<style>"
+        # "*{box-sizing:border-box;margin:0;padding:0}"
+        # "body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;background:#0f0c29;color:#e0e0e0;line-height:1.6}"
+        # ".wrap{max-width:700px;margin:0 auto;padding:20px}"
+        # ".hero{text-align:center;padding:30px 0}"
+        # ".hero h1{font-size:30px;margin-bottom:4px}"
+        # ".hero .sub{color:#888;font-size:14px}"
+        # ".hero .free{color:#4ade80;font-size:13px;margin-top:8px}"
+        # ".card{background:#1a1a2e;border-radius:12px;padding:20px;margin-bottom:12px;border:1px solid #333}"
+        # ".card h2{font-size:16px;margin-bottom:8px}"
+        # ".card p{font-size:13px;color:#999;margin-bottom:8px}"
+        # ".card .code{background:#222;padding:8px 12px;border-radius:6px;font-family:monospace;font-size:12px;color:#667eea;margin:6px 0}"
+        # ".btn{display:inline-block;padding:10px 24px;border-radius:8px;font-weight:600;font-size:13px;text-decoration:none;margin:4px}"
+        # ".btn-p{background:#667eea;color:#fff}.btn-p:hover{background:#5a6fd6}"
+        # ".btn-g{background:#10b981;color:#fff}.btn-g:hover{background:#059669}"
+        # ".btn-o{border:1px solid #555;color:#e0e0e0}"
+        # ".l{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}"
+        # ".footer{text-align:center;padding:16px;font-size:12px;color:#555}"
+        # ".footer a{color:#667eea;text-decoration:none}"
+        # "a{color:#667eea;text-decoration:none}"
+        # "@media(max-width:500px){.hero h1{font-size:24px}}"
+        # "</style></head><body><div class=\"wrap\">"
+
+        # "<div class=\"hero\"><h1>🛡️ VERITAS</h1><p class=\"sub\">AI Agent Identity &amp; Reputation Protocol on ICP</p><div class=\"free\">🎉 Year 1 free &middot; Agent registration free forever</div></div>"
+
+        # "<div class=\"card\"><h2>🔌 MCP Discovery</h2><p>AI agents discover VERITAS tools via MCP at <code>/mcp/jsonrpc</code></p>"
+        # "<div class=\"l\"><a class=\"btn btn-p\" href=\"/mcp/jsonrpc\">View Tools</a><a class=\"btn btn-o\" href=\"https://github.com/kodydpa-hub/veritas/tree/master/docs/examples/demos\" target=\"_blank\">Demo Scripts</a></div></div>"
+
+        # "<div class=\"card\"><h2>📦 For AI Agents</h2><p>Register your agent identity and build verifiable reputation.</p>"
+        # "<div class=\"code\">npm install veritas-agent</div>"
+        # "<div class=\"l\"><a class=\"btn btn-g\" href=\"https://www.npmjs.com/package/veritas-agent\" target=\"_blank\">npm Package</a><a class=\"btn btn-o\" href=\"https://github.com/kodydpa-hub/veritas/tree/master/docs/guides/INTEGRATION.md\" target=\"_blank\">Guide</a></div></div>"
+
+        # "<div class=\"card\"><h2>🏢 For Platforms</h2><p>Verify agents, check credit scores, and push reputation data.</p>"
+        # "<div class=\"code\">npm install veritas-verify</div>"
+        # "<div class=\"l\"><a class=\"btn btn-g\" href=\"https://www.npmjs.com/package/veritas-verify\" target=\"_blank\">npm Package</a><a class=\"btn btn-o\" href=\"/admin\">Admin Dashboard</a></div></div>"
+
+        # "<div class=\"card\"><h2>💳 Onboarding Wizard</h2><p>Step-by-step guide with plan selection, deposit instructions, and live demos.</p>"
+        # "<a class=\"btn btn-p\" href=\"https://github.com/kodydpa-hub/veritas/blob/master/docs/onboard/index.html\" target=\"_blank\" style=\"width:100%;text-align:center\">Open Interactive Guide →</a></div>"
+
+        # "<div class=\"footer\"><a href=\"https://github.com/kodydpa-hub/veritas\">GitHub</a> &middot; <a href=\"/admin\">Admin</a> &middot; <a href=\"https://www.npmjs.com/package/veritas-verify\">npm</a> &middot; <a href=\"https://github.com/kodydpa-hub/veritas/blob/master/docs/pricing-model.md\">Pricing</a></div>"
+
+        # "</div></body></html>";
+      return { status_code = 200; headers = [("Content-Type", "text/html; charset=utf-8")]; body = Text.encodeUtf8(page); };
     };
 
     if (req.url == "/admin" or req.url == "/admin/") {
