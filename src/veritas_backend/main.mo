@@ -1432,7 +1432,8 @@ shared actor class Veritas() = this {
       
       var tiersHtml = html;
       for (tc in scoreTierConfig.vals()) {
-        tiersHtml #= "<tr><td>" # tc.tier # "</td><td>" # debug_show(tc.maxDaily) # "</td></tr>";
+        let limitDisplay : Text = if (tc.maxDaily == 0) { "Unlimited" } else { debug_show(tc.maxDaily) };
+        tiersHtml #= "<tr><td>" # tc.tier # "</td><td>" # limitDisplay # "</td></tr>";
       };
       tiersHtml #= "</table></div>";
       
