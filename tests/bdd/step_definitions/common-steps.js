@@ -1,9 +1,8 @@
-const { Given, When, Then, Before } = require('@cucumber/cucumber');
+const { Given, When, Then } = require('@cucumber/cucumber');
 const assert = require('assert');
 
-Before(function () {
-  this.dfx('getStats');
-});
+// Before hook removed — each step has its own timeout
+// The 'getStats' call is handled by the Gherkin Given step
 
 // ── Given ──
 
@@ -14,6 +13,14 @@ Given('the VERITAS canister is deployed on ICP', function () {
 
 Given('an agent has deposited cycles', function () {
   // Skip cycle deposit on playground
+});
+
+Given('an agent is registered', function () {
+  const principal = this.getPrincipal();
+  this.dfx('resolve', `(principal "${principal}")`);
+  if (!this.result || this.result.includes('null')) {
+    this.dfx('register', '(blob "\02\56\18\00\48\90\1b\2d")');
+  }
 });
 
 Given('an agent is already registered', function () {

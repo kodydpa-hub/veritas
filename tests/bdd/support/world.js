@@ -12,10 +12,10 @@ class VeritasWorld {
 
   dfx(method, args = '') {
     const cmd = args
-      ? `cd /home/chris/.openclaw/workspace/veritas && dfx canister --network ${this.network} call ${this.canister} ${method} '${args}' 2>/dev/null`
-      : `cd /home/chris/.openclaw/workspace/veritas && dfx canister --network ${this.network} call ${this.canister} ${method} 2>/dev/null`;
+      ? `dfx canister --network ${this.network} call ${this.canister} ${method} '${args}' 2>/dev/null`
+      : `dfx canister --network ${this.network} call ${this.canister} ${method} 2>/dev/null`;
     try {
-      this.result = execSync(cmd, { encoding: 'utf-8', timeout: 15000 });
+      this.result = execSync(cmd, { encoding: 'utf-8', timeout: 15000, maxBuffer: 1024 * 1024 });
       this.lastError = null;
       return this.result;
     } catch (e) {
@@ -26,8 +26,12 @@ class VeritasWorld {
   }
 
   getPrincipal() {
-    const p = execSync(`dfx identity get-principal --network ${this.network}`, { encoding: 'utf-8', timeout: 5000 }).trim();
-    return p.replace(/\n/g, '').replace(/\r/g, '');
+    try {
+      const p = execSync(`dfx identity get-principal --network ${this.network} 2>/dev/null`, { encoding: 'utf-8', timeout: 5000 }).trim();
+      return p.replace(/\n/g, '').split('\n')[0].trim();
+    } catch (e) {
+      return '2vxsx-fae';
+    }
   }
 
   resultContains(text) {

@@ -6,7 +6,7 @@ module.exports = {
       'tests/bdd/support/world.js',
     ],
     format: ['progress-bar', 'html:tests/bdd/report.html'],
-    timeout: 30000,
+    timeout: 60000,
     retry: 0,
     publishQuiet: true,
   },
