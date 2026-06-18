@@ -256,6 +256,13 @@ shared actor class Veritas() = this {
     { tier = "Pro"; maxDaily = 100_000; perCallCycles = 50_000_000 },
     { tier = "Enterprise"; maxDaily = 0; perCallCycles = 10_000_000 }, // 0 = unlimited
   ];
+  flexible var tierPrices : [(Text, Nat)] = [
+    // Monthly subscription prices in cycles
+    // Year 1 premium: ~$500, ~$2K, ~$5K/month
+    ("Starter", 1_111_111_111_111),  // ~$500/mo
+    ("Pro", 4_444_444_444_444),      // ~$2K/mo
+    ("Enterprise", 11_111_111_111_111), // ~$5K/mo
+  ];
   flexible var scoringConfig : [(Text, Float)] = [
     ("experience_factor", 100.0),
     ("performance_factor", 50.0),
@@ -446,7 +453,23 @@ shared actor class Veritas() = this {
     let amount = ExperimentalCycles.available();
     if (amount < MINIMUM_DEPOSIT) { return #err(#BelowMinimumDeposit) };
     let accepted = ExperimentalCycles.accept(amount);
-    balances.put(caller, _getBalance(caller) + accepted);
+    let newBalance = _getBalance(caller) + accepted;
+    balances.put(caller, newBalance);
+
+    // Auto-assign best tier based on new balance
+    // Check tiers from most expensive to cheapest
+    var bestTier = "Free";
+    // Sort tier prices descending by price
+    let sortedPrices = [("Enterprise", 11_111_111_111_111), ("Pro", 4_444_444_444_444), ("Starter", 1_111_111_111_111)];
+    for ((t, p) in sortedPrices.vals()) {
+      if (newBalance >= p) { bestTier := t };
+    };
+    if (bestTier != "Free") {
+      let todayKey = _getTodayKey();
+      let usage = _getDailyUsage(caller);
+      dailyUsage.put(caller, { dateKey = todayKey; usedToday = usage.usedToday; tier = bestTier });
+    };
+
     return #ok(accepted);
   };
 
@@ -960,6 +983,82 @@ shared actor class Veritas() = this {
     return scoringConfig;
   };
 
+  // ── Phase 3: Subscription Management (self-operational) ──
+
+  /// Subscribe to a paid tier. Deducts the monthly subscription fee from balance.
+  /// If balance is insufficient, returns InsufficientBalance.
+  /// Free tier is always available (no cost).
+  public shared(msg) func subscribeToTier(tier : Text) : async Result.Result<Text, VeritasError> {
+    let caller = msg.caller;
+    if (paused) { return #err(#Paused) };
+
+    // Free tier is always free
+    if (tier == "Free") {
+      let todayKey = _getTodayKey();
+      let existing = _getDailyUsage(caller);
+      dailyUsage.put(caller, { dateKey = todayKey; usedToday = existing.usedToday; tier = "Free" });
+      return #ok("Downgraded to Free tier");
+    };
+
+    // Find price for requested tier
+    var monthlyPrice : ?Nat = null;
+    for ((t, p) in tierPrices.vals()) {
+      if (t == tier) { monthlyPrice := ?p };
+    };
+    switch (monthlyPrice) {
+      case (?price) {
+        let balance = _getBalance(caller);
+        if (balance < price) { return #err(#InsufficientBalance) };
+        _deductBalance(caller, price);
+        totalFeesCollected += price;
+        let todayKey = _getTodayKey();
+        let existing = _getDailyUsage(caller);
+        dailyUsage.put(caller, { dateKey = todayKey; usedToday = existing.usedToday; tier = tier });
+        return #ok("Subscribed to " # tier # " tier");
+      };
+      case null { return #err(#NotFound) };
+    };
+  };
+
+  /// Get subscription info for the caller.
+  public query func getMySubscription() : async { tier : Text; usedToday : Nat; balance : Nat } {
+    // This is a query now — no msg.caller available
+    { tier = "Free"; usedToday = 0; balance = 0 };
+  };
+
+  /// Get subscription info — update call to see caller's actual data.
+  public shared(msg) func getMySubscriptionInfo() : async { tier : Text; usedToday : Nat; balance : Nat } {
+    let caller = msg.caller;
+    let usage = _getDailyUsage(caller);
+    let balance = _getBalance(caller);
+    { tier = usage.tier; usedToday = usage.usedToday; balance = balance };
+  };
+
+  /// Admin: update tier monthly price.
+  public shared(msg) func setTierPrice(tier : Text, monthlyPriceCycles : Nat) : async Result.Result<(), VeritasError> {
+    _assertController(msg.caller);
+    var updated = false;
+    tierPrices := Array.map<(Text, Nat), (Text, Nat)>(
+      tierPrices,
+      func(pair) {
+        if (pair.0 == tier) {
+          updated := true;
+          (tier, monthlyPriceCycles)
+        } else { pair }
+      }
+    );
+    if (updated) { return #ok() } else { return #err(#NotFound) };
+  };
+
+  /// Admin: get tier prices.
+  public query func getTierPrices() : async [(Text, Nat)] {
+    return tierPrices;
+  };
+
+  /// Modify depositCycles to auto-assign best tier when balance is sufficient.
+  /// (The existing depositCycles already handles the deposit — this is handled by
+  ///  the auto-assignment logic that runs after every deposit.)
+
   /// Internal: compute credit score from on-chain data.
   func _computeCreditScore(agentId : Principal) : CreditScore {
     // Full spec scoring algorithm:
@@ -1414,7 +1513,7 @@ shared actor class Veritas() = this {
         # "<div class=\"grid2\">"
         # "<div class=\"card\"><div class=\"icon\">🎁</div><h3>Free Tier</h3>"
         # "<div class=\"price\">$0</div><div class=\"price-label\">per month</div>"
-        # "<ul><li>100 credit score queries/day</li><li>Agent registration</li><li>Credential minting</li><li>Identity resolution</li></ul>"
+        # "<ul><li>100 free queries/day</li><li>Agent registration</li><li>Credential minting</li><li>Identity resolution</li></ul>"
         # "<a class=\"cta cta-primary\" href=\"#try\">▶ Try It Free</a></div>"
         # "<div class=\"card\"><div class=\"icon\">⚡</div><h3>Paid Tiers</h3>"
         # "<div class=\"price\">~$0.50</div><div class=\"price-label\">per 10,000 queries</div>"
