@@ -1293,6 +1293,40 @@ shared actor class Veritas() = this {
       return { status_code = 200; headers = [("Content-Type", "application/json")]; body = Text.encodeUtf8(info); };
     };
 
+    if (req.url == "/docs" or req.url == "/docs/") {
+      let docsPage = "<!DOCTYPE html><html lang=\"en\"><head>"
+        # "<meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\">"
+        # "<title>VERITAS Docs</title>"
+        # "<style>body{font-family:sans-serif;max-width:720px;margin:0 auto;padding:20px;background:#f5f5f5;line-height:1.6}"
+        # "h1{color:#1a1a2e}.card{background:#fff;border-radius:8px;padding:16px;margin:12px 0;box-shadow:0 1px 3px rgba(0,0,0,0.1)}"
+        # "code{background:#e8e8e8;padding:2px 6px;border-radius:3px;font-size:14px}"
+        # "pre{background:#272822;color:#f8f8f2;padding:12px;border-radius:6px;overflow:auto}"
+        # "a{color:#667eea;text-decoration:none}a:hover{text-decoration:underline}"
+        # "</style></head><body>"
+        # "<h1>📖 VERITAS Documentation</h1>"
+        # "<p>The VERITAS protocol is fully documented. Start here:</p>"
+        # "<div class=\"card\"><h2>🔧 Quick Start</h2>"
+        # "<p><strong>For AI Agents:</strong></p>"
+        # "<pre>npm install veritas-agent</pre>"
+        # "<p><strong>For Platforms:</strong></p>"
+        # "<pre>npm install veritas-verify</pre>"
+        # "</div>"
+        # "<div class=\"card\"><h2>📚 Full Documentation</h2>"
+        # "<p><a href=\"https://github.com/kodydpa-hub/veritas/tree/master/docs/guides/INTEGRATION.md\" target=\"_blank\">Integration Guide →</a></p>"
+        # "<p><a href=\"https://github.com/kodydpa-hub/veritas/tree/master/docs/examples/demos\" target=\"_blank\">Demo Scripts →</a></p>"
+        # "<p><a href=\"https://github.com/kodydpa-hub/veritas/tree/master/docs/examples/marketplace\" target=\"_blank\">Reference Marketplace UI →</a></p>"
+        # "<p><a href=\"/admin\">Admin Dashboard →</a></p>"
+        # "</div>"
+        # "<div class=\"card\"><h2>🤖 MCP Integration</h2>"
+        # "<p>AI agents can discover VERITAS via MCP at <code>/mcp/jsonrpc</code></p>"
+        # "<p><a href=\"/mcp/jsonrpc\" target=\"_blank\">View available tools →</a></p>"
+        # "</div>"
+        # "<div class=\"card\" style=\"text-align:center;color:#999;font-size:13px\">"
+        # "<p>Canister ID: " # canisterId # " | VERITAS v1.5.0</p>"
+        # "</div></body></html>";
+      return { status_code = 200; headers = [("Content-Type", "text/html; charset=utf-8")]; body = Text.encodeUtf8(docsPage); };
+    };
+
     if (req.url == "/admin" or req.url == "/admin/") {
       let statsInfo = "";
       let sourcesHtml = "";
@@ -1329,7 +1363,7 @@ shared actor class Veritas() = this {
       tiersHtml #= "</table></div>";
       
       tiersHtml #= "<div class=\"card\"><h2>🌐 Sources</h2><p>Register sources via dfx: <code>dfx canister call veritas_backend registerSource</code></p></div>";
-      tiersHtml #= "<div class=\"card\"><h2>🧪 Test</h2><p>Check source: getActiveSources</p></div>";
+      tiersHtml #= "<div class=\"card\"><h2>📖 Documentation</h2><p>View the <a href=\"/docs\" style=\"color:#667eea\">quick start guide</a> or full <a href=\"https://github.com/kodydpa-hub/veritas/tree/master/docs/guides/INTEGRATION.md\" style=\"color:#667eea\">integration docs</a> on GitHub.</p></div>";
       tiersHtml #= "</body></html>";
       
       return { status_code = 200; headers = [("Content-Type", "text/html; charset=utf-8")]; body = Text.encodeUtf8(tiersHtml); };
