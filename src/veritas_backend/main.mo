@@ -1428,11 +1428,11 @@ shared actor class Veritas() = this {
         # "<div class=\"card\"><h2>⛓️ Emergency Controls</h2>"
         # "<p>Status: " # (if (paused) { "<span class=\"badge badge-red\">PAUSED</span>" } else { "<span class=\"badge badge-green\">ACTIVE</span>" }) # "</p>"
         # "</div>"
-        # "<div class=\"card\"><h2>📋 API Tiers</h2><table><tr><th>Tier</th><th>Daily Limit</th><th>Per-Call Cycles</th></tr>";
+        # "<div class=\"card\"><h2>📋 API Tiers</h2><table><tr><th>Tier</th><th>Daily Limit</th></tr>";
       
       var tiersHtml = html;
       for (tc in scoreTierConfig.vals()) {
-        tiersHtml #= "<tr><td>" # tc.tier # "</td><td>" # debug_show(tc.maxDaily) # "</td><td>" # debug_show(tc.perCallCycles) # "</td></tr>";
+        tiersHtml #= "<tr><td>" # tc.tier # "</td><td>" # debug_show(tc.maxDaily) # "</td></tr>";
       };
       tiersHtml #= "</table></div>";
       
