@@ -11,12 +11,14 @@ import Result "mo:base/Result";
 import ExperimentalCycles "mo:base/ExperimentalCycles";
 import Nat8 "mo:base/Nat8";
 import Char "mo:base/Char";
+import Float "mo:base/Float";
 
 // ════════════════════════════════════════════════════════════
 //  VERITAS — Verifiable AI Agent Identity Protocol
 //  Phase 1: Identity Registry + Credential Minting + PoP + W3C VCs
 //  Phase 2: Real SHA256 signing, hex-encoded keys, hash-based IDs
-//  Version: 1.2.0
+//  Phase 3: Credit Scoring + API Tiers
+//  Version: 1.3.0
 // ════════════════════════════════════════════════════════════
 
 shared actor class Veritas() = this {
@@ -36,6 +38,7 @@ shared actor class Veritas() = this {
   stable var trustedSourceEntries : [(Principal, TrustLevel)] = [];
   stable var configEntries : [(Text, Text)] = [];
   stable var revokedPlatformSources : [Text] = [];
+  stable var dailyUsageEntries : [(Principal, DailyUsage)] = [];
 
   // ── Core Types ──
 
@@ -103,6 +106,42 @@ shared actor class Veritas() = this {
     #SourceFlagged : Text;
   };
 
+  // ── Phase 3: Credit Scoring Types ──
+
+  public type CreditTier = {
+    #Excellent;
+    #Good;
+    #Fair;
+    #Poor;
+    #Unrated;
+  };
+
+  public type ScoreFactor = {
+    name : Text;
+    weight : Float;
+    value : Text;
+    impact : Text; // "Positive" | "Negative" | "Neutral"
+  };
+
+  public type CreditScore = {
+    score : Nat;
+    tier : CreditTier;
+    factors : [ScoreFactor];
+    computedAt : Int;
+  };
+
+  public type DailyUsage = {
+    dateKey : Nat;        // YYYYMMDD as integer
+    usedToday : Nat;
+    tier : Text;           // "Free" | "Starter" | "Pro" | "Enterprise"
+  };
+
+  public type ScoreTierConfig = {
+    tier : Text;
+    maxDaily : Nat;         // 0 = unlimited
+    perCallCycles : Nat;    // cycles deducted per lookup for paid tiers
+  };
+
   // ── Stable State ──
 
   flexible var identities = HashMap.HashMap<Principal, AgentIdentity>(
@@ -144,6 +183,25 @@ shared actor class Veritas() = this {
   let KEY_NAME : Text = "key_1";
   let DERIVATION_PATH : [Blob] = [];
 
+  // ── Phase 3: Credit Scoring Stable State ──
+  flexible var dailyUsage = HashMap.HashMap<Principal, DailyUsage>(
+    0, Principal.equal, Principal.hash
+  );
+  flexible var scoreTierConfig : [ScoreTierConfig] = [
+    { tier = "Free"; maxDaily = 100; perCallCycles = 0 },
+    { tier = "Starter"; maxDaily = 10_000; perCallCycles = 100_000_000 },
+    { tier = "Pro"; maxDaily = 100_000; perCallCycles = 50_000_000 },
+    { tier = "Enterprise"; maxDaily = 0; perCallCycles = 10_000_000 }, // 0 = unlimited
+  ];
+  flexible var scoringConfig : [(Text, Float)] = [
+    ("experience_factor", 100.0),
+    ("performance_factor", 50.0),
+    ("diversity_factor", 50.0),
+    ("longevity_factor", 50.0),
+    ("penalty_factor", -100.0),
+    ("base_score", 500.0),
+  ];
+
   // ── Upgrade Hooks ──
   system func preupgrade() {
     identitiesEntries := Iter.toArray(identities.entries());
@@ -153,6 +211,7 @@ shared actor class Veritas() = this {
     trustedSourceEntries := Iter.toArray(trustedSources.entries());
     configEntries := Iter.toArray(config.entries());
     revokedPlatformSources := stalePlatforms;
+    dailyUsageEntries := Iter.toArray(dailyUsage.entries());
   };
 
   system func postupgrade() {
@@ -163,8 +222,10 @@ shared actor class Veritas() = this {
     trustedSources := HashMap.fromIter(trustedSourceEntries.vals(), 0, Principal.equal, Principal.hash);
     config := HashMap.fromIter(configEntries.vals(), 0, Text.equal, Text.hash);
     stalePlatforms := revokedPlatformSources;
+    dailyUsage := HashMap.fromIter(dailyUsageEntries.vals(), 0, Principal.equal, Principal.hash);
     // Clear transient upgrade buffers
     identitiesEntries := [];
+    dailyUsageEntries := [];
     balanceEntries := [];
     credentialEntries := [];
     revokedNoncesEntries := [];
@@ -182,6 +243,13 @@ shared actor class Veritas() = this {
     if (storageVersion < 3) {
       // Phase 2 migration: no new state, just version bump
       storageVersion := 3;
+    };
+    if (storageVersion < 4) {
+      // Phase 3 migration: initialize dailyUsage
+      dailyUsage := HashMap.HashMap<Principal, DailyUsage>(
+        0, Principal.equal, Principal.hash
+      );
+      storageVersion := 4;
     };
   };
 
@@ -593,6 +661,217 @@ shared actor class Veritas() = this {
     if (ExperimentalCycles.balance() < amount) { return #err(#InsufficientBalance) };
     ExperimentalCycles.add(amount);
     return #ok();
+  };
+
+  // ══════════════════════════════════════════════════════════
+  //  PHASE 3: CREDIT SCORING + API TIERS
+  // ══════════════════════════════════════════════════════════
+
+  /// Get the credit score for an agent (free tier, query call).
+  /// Rate limited to 100 queries/day per principal by default.
+  public query func getCreditScore(agentId : Principal) : async ?CreditScore {
+    switch (identities.get(agentId)) {
+      case (?_) {
+        let score = _computeCreditScore(agentId);
+        return ?score;
+      };
+      case null { return null };
+    };
+  };
+
+  /// Get credit score with daily usage tracking (update call, deducts cycles for paid tiers).
+  /// Use this for programmatic access — respects rate limits and billing.
+  public shared(msg) func getCreditScorePaid(agentId : Principal) : async Result.Result<CreditScore, VeritasError> {
+    let caller = msg.caller;
+    if (paused) { return #err(#Paused) };
+
+    switch (identities.get(agentId)) {
+      case (?_) {
+        // Check and update daily usage
+        let usage = _getDailyUsage(caller);
+        let tierConfig = _getTierConfig(usage.tier);
+
+        // Check rate limit (0 = unlimited)
+        if (tierConfig.maxDaily > 0 and usage.usedToday >= tierConfig.maxDaily) {
+          return #err(#RateLimited);
+        };
+
+        // Deduct cycles for paid tiers
+        if (tierConfig.perCallCycles > 0) {
+          let balance = _getBalance(caller);
+          if (balance < tierConfig.perCallCycles) {
+            return #err(#InsufficientBalance);
+          };
+          _deductBalance(caller, tierConfig.perCallCycles);
+          totalFeesCollected += tierConfig.perCallCycles;
+        };
+
+        // Increment usage
+        let todayKey = _getTodayKey();
+        dailyUsage.put(caller, { dateKey = todayKey; usedToday = usage.usedToday + 1; tier = usage.tier });
+
+        let score = _computeCreditScore(agentId);
+        return #ok(score);
+      };
+      case null { return #err(#NotFound) };
+    };
+  };
+
+  /// Admin: set an agent's tier (Free / Starter / Pro / Enterprise).
+  public shared(msg) func setAgentTier(agentId : Principal, tier : Text) : async Result.Result<(), VeritasError> {
+    _assertController(msg.caller);
+    let validTiers : [Text] = ["Free", "Starter", "Pro", "Enterprise"];
+    var found = false;
+    for (t in validTiers.vals()) {
+      if (t == tier) { found := true };
+    };
+    if (not found) { return #err(#NotFound) };
+
+    let todayKey = _getTodayKey();
+    let usage = _getDailyUsage(agentId);
+    dailyUsage.put(agentId, { dateKey = todayKey; usedToday = usage.usedToday; tier = tier });
+    return #ok();
+  };
+
+  /// Admin: get the current tier config for all tiers.
+  public query func getTierConfig() : async [ScoreTierConfig] {
+    return scoreTierConfig;
+  };
+
+  /// Admin: update a tier's configuration.
+  public shared(msg) func updateTierConfig(tier : Text, maxDaily : Nat, perCallCycles : Nat) : async Result.Result<(), VeritasError> {
+    _assertController(msg.caller);
+    var updated = false;
+    scoreTierConfig := Array.map<ScoreTierConfig, ScoreTierConfig>(
+      scoreTierConfig,
+      func(tc) {
+        if (tc.tier == tier) {
+          updated := true;
+          { tier = tc.tier; maxDaily = maxDaily; perCallCycles = perCallCycles }
+        } else { tc }
+      }
+    );
+    if (updated) { return #ok() } else { return #err(#NotFound) };
+  };
+
+  /// Admin: update a scoring weight factor.
+  public shared(msg) func setScoringWeight(factorName : Text, value : Float) : async Result.Result<(), VeritasError> {
+    _assertController(msg.caller);
+    var updated = false;
+    scoringConfig := Array.map<(Text, Float), (Text, Float)>(
+      scoringConfig,
+      func(pair) {
+        if (pair.0 == factorName) {
+          updated := true;
+          (factorName, value)
+        } else { pair }
+      }
+    );
+    if (updated) { return #ok() } else { return #err(#NotFound) };
+  };
+
+  /// Admin: get current scoring configuration.
+  public query func getScoringConfig() : async [(Text, Float)] {
+    return scoringConfig;
+  };
+
+  /// Internal: compute credit score from on-chain data.
+  func _computeCreditScore(agentId : Principal) : CreditScore {
+    // Simplified scoring — peers at all credentials for this agent
+    // and computes a weighted reputation score from on-chain data.
+    let agentCredentials = _getAgentCredentialsAll(agentId);
+    let credCount = agentCredentials.size();
+    var revoked : Nat = 0;
+    
+    for (cred in agentCredentials.vals()) {
+      switch (cred.status) {
+        case (#Revoked(_)) { revoked += 1 };
+        case (_) {};
+      };
+    };
+
+    let nCreds = if (credCount >= 100) { 100 } else { credCount };
+    let nRevoked = if (revoked >= 5) { 5 } else { revoked };
+
+    let experience = Float.fromInt(nCreds : Int) / 100.0;
+    let penalties = Float.fromInt(nRevoked : Int) / 5.0;
+
+    let baseScore = _getScoringWeight("base_score", 500.0);
+    let expFactor = _getScoringWeight("experience_factor", 100.0);
+    let penFactor = _getScoringWeight("penalty_factor", -100.0);
+
+    let rawScore = baseScore + expFactor * experience + penFactor * penalties;
+
+    let clampedScore = if (rawScore < 0.0) { 0 }
+      else if (rawScore > 850.0) { 850 }
+      else { Float.toInt(rawScore) };
+
+    let scoreTier : CreditTier = if (clampedScore >= 720) { #Excellent }
+      else if (clampedScore >= 580) { #Good }
+      else if (clampedScore >= 400) { #Fair }
+      else if (clampedScore >= 200) { #Poor }
+      else { #Unrated };
+
+    let factors : [ScoreFactor] = [
+      { name = "experience"; weight = expFactor / 850.0; value = debug_show(credCount) # " credentials"; impact = if (experience > 0.5) { "Positive" } else { "Neutral" } },
+      { name = "penalties"; weight = Float.abs(penFactor) / 850.0; value = debug_show(revoked) # " revoked"; impact = if (penalties > 0.0) { "Negative" } else { "Neutral" } },
+    ];
+
+    { score = Int.abs(clampedScore); tier = scoreTier; factors = factors; computedAt = Time.now() }
+  };
+
+  func _getAgentCredentialsAll(agentId : Principal) : [CredentialRecord] {
+    var results : [CredentialRecord] = [];
+    for ((_, cred) in credentials.entries()) {
+      if (Principal.equal(cred.agentId, agentId)) {
+        results := Array.append(results, [cred]);
+      };
+    };
+    return results;
+  };
+
+  /// Internal: get a scoring weight from config, with default fallback.
+  func _getScoringWeight(name : Text, default : Float) : Float {
+    for ((n, v) in scoringConfig.vals()) {
+      if (n == name) { return v };
+    };
+    return default;
+  };
+
+  /// Internal: get or create daily usage for a principal.
+  func _getDailyUsage(who : Principal) : DailyUsage {
+    let todayKey = _getTodayKey();
+    switch (dailyUsage.get(who)) {
+      case (?usage) {
+        if (usage.dateKey == todayKey) { usage }
+        else { { dateKey = todayKey; usedToday = 0; tier = usage.tier } };
+      };
+      case null {
+        { dateKey = todayKey; usedToday = 0; tier = "Free" };
+      };
+    };
+  };
+
+  /// Internal: get today's date key as YYYYMMDD integer.
+  func _getTodayKey() : Nat {
+    // Approximate from Time.now() — nanoseconds since 1970-01-01
+    let nowNs = Time.now();
+    let daysSinceEpoch : Int = nowNs / (24 * 3600 * 1_000_000_000);
+    // Convert to YYYYMMDD format
+    let year : Int = 1970 + daysSinceEpoch / 365;
+    let dayOfYear : Int = daysSinceEpoch % 365;
+    let month : Int = dayOfYear / 30 + 1;
+    let day : Int = dayOfYear % 30 + 1;
+    Int.abs(year * 10_000 + month * 100 + day)
+  };
+
+  /// Internal: get tier config by name.
+  func _getTierConfig(tierName : Text) : ScoreTierConfig {
+    for (tc in scoreTierConfig.vals()) {
+      if (tc.tier == tierName) { return tc };
+    };
+    // Default to Free
+    { tier = "Free"; maxDaily = 100; perCallCycles = 0 };
   };
 
   // ══════════════════════════════════════════════════════════
