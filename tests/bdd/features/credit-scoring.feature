@@ -8,7 +8,7 @@ Feature: Credit Scoring
 
   Scenario: Platform queries an agent's credit score
     Given an agent has registered and holds active credentials
-    When a platform calls getCreditScore with the agent's principal
+    When a platform calls getCreditScore with the agent principal
     Then the canister returns a CreditScore
     And the score is between 0 and 850
     And the tier is one of Excellent, Good, Fair, Poor, or Unrated
@@ -16,7 +16,7 @@ Feature: Credit Scoring
 
   Scenario: Unknown agent returns no credit score
     Given an agent has not registered
-    When a platform calls getCreditScore with the agent's principal
+    When a platform calls getCreditScore with the agent principal
     Then the canister returns null
 
   Scenario: Scoring weights are admin-configurable
@@ -27,7 +27,7 @@ Feature: Credit Scoring
   Scenario: Agent tier can be upgraded to Starter
     Given an agent is on the Free tier
     When the admin upgrades the agent to the Starter tier
-    Then the agent's daily limit increases from 100 to 10,000
+    Then the daily limit increases from 100 to 10,000
 
   Scenario: Paid tier deducts cycles per lookup
     Given an agent is on the Starter tier
