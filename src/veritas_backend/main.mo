@@ -12,6 +12,7 @@ import ExperimentalCycles "mo:base/ExperimentalCycles";
 import Nat8 "mo:base/Nat8";
 import Char "mo:base/Char";
 import Float "mo:base/Float";
+import MCP "../mcp";
 // Timer import removed — using heartbeat + time-based batch processing instead
 
 // ════════════════════════════════════════════════════════════
@@ -1263,6 +1264,16 @@ shared actor class Veritas() = this {
       return { status_code = 200; headers = [("Content-Type", "application/json")]; body = Text.encodeUtf8("{\"status\":\"ok\"}"); };
     };
 
+    if (req.url == "/mcp/jsonrpc" or req.url == "/mcp/jsonrpc/") {
+      let response = MCP.handleGet();
+      return { status_code = 200; headers = [("Content-Type", "application/json")]; body = Text.encodeUtf8(response); };
+    };
+
+    if (req.url == "/mcp/info") {
+      let info = MCP.getMcpInfo(canisterId);
+      return { status_code = 200; headers = [("Content-Type", "application/json")]; body = Text.encodeUtf8(info); };
+    };
+
     if (req.url == "/admin" or req.url == "/admin/") {
       let statsInfo = "";
       let sourcesHtml = "";
@@ -1306,6 +1317,36 @@ shared actor class Veritas() = this {
     };
 
     return { status_code = 404; headers = [("Content-Type", "text/plain")]; body = Text.encodeUtf8("Not found"); };
+  };
+
+  // ══════════════════════════════════════════════════════════
+  //  PHASE 6: MCP HTTP JSON-RPC (Update handler for POST)
+  // ══════════════════════════════════════════════════════════
+
+  /// Handle POST requests to /mcp/jsonrpc — executes MCP tool calls.
+  public shared(msg) func http_request_update(req : {
+    url : Text;
+    method : Text;
+    headers : [(Text, Text)];
+    body : Blob;
+  }) : async {
+    status_code : Nat16;
+    headers : [(Text, Text)];
+    body : Blob;
+  } {
+    if (req.url == "/mcp/jsonrpc" or req.url == "/mcp/jsonrpc/") {
+      let bodyText = Text.decodeUtf8(req.body);
+      switch (bodyText) {
+        case (?text) {
+          let response = MCP.handlePost(text);
+          return { status_code = 200; headers = [("Content-Type", "application/json")]; body = Text.encodeUtf8(response); };
+        };
+        case null {
+          return { status_code = 400; headers = [("Content-Type", "application/json")]; body = Text.encodeUtf8("{\"jsonrpc\":\"2.0\",\"id\":0,\"error\":{\"code\":-32700,\"message\":\"Parse error: invalid UTF-8 body\"}}"); };
+        };
+      };
+    };
+    return { status_code = 404; headers = [("Content-Type", "text/plain")]; body = Text.encodeUtf8("Not found: " # req.url); };
   };
 
   // ══════════════════════════════════════════════════════════
