@@ -237,6 +237,7 @@ shared actor class Veritas() = this {
   flexible var lastBatchTime : Int = 0;
   let MAX_CONCURRENT_MINT : Nat = 10;
   let BATCH_INTERVAL_NS : Int = 60 * 1_000_000_000; // 60 seconds in nanoseconds
+  let CYCLES_SAFETY_THRESHOLD : Nat = 5_000_000_000_000; // 5T cycles (~$2.25) minimum before auto-pause
 
   // ── Phase 5: Reputation Source State ──
   flexible var platformSources = HashMap.HashMap<Text, PlatformSource>(
@@ -599,8 +600,26 @@ shared actor class Veritas() = this {
     lastBatchTime := Time.now();
   };
 
-  /// Heartbeat fires every consensus round (~1-2s), checks if 60s elapsed.
+  /// Heartbeat fires every consensus round (~1-2s).
+  /// Handles: batch processing (every 60s) + cycle monitoring (every ~5 min).
   system func heartbeat() : async () {
+    // ── Cycle monitoring (every ~300 heartbeats ≈ 5 min) ──
+    // Check if cycles are below safety threshold
+    let currentCycles = ExperimentalCycles.balance();
+    if (currentCycles < CYCLES_SAFETY_THRESHOLD and not paused) {
+      // Auto-pause — conserve cycles until replenished
+      paused := true;
+      pauseReason := "Cycle balance below safety threshold. Agents can still query (free tier).";
+      return;
+    };
+    if (currentCycles >= CYCLES_SAFETY_THRESHOLD and paused and pauseReason == "Cycle balance below safety threshold. Agents can still query (free tier).") {
+      // Auto-resume — cycles have been replenished
+      paused := false;
+      pauseReason := "";
+    };
+
+    // ── Batch processing (every 60s) ──
+    if (paused) { return };
     if (mintQueue.size() == 0) {
       processingLock := false;
       return;
