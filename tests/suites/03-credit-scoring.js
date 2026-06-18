@@ -26,10 +26,11 @@ test('getScoringConfig returns non-empty result', () => {
   assert.ok(result.includes('base_score'), 'Should include base_score');
 });
 
-test('getScoringConfig has 6 factors', () => {
+test('getScoringConfig has all scoring factors', () => {
   const result = dfx('getScoringConfig');
   const count = (result.match(/record/g) || []).length;
-  assert.ok(count >= 6, `Should have at least 6 records, got ${count}`);
+  assert.ok(count >= 7, `Should have at least 7 records, got ${count}`);
+  assert.ok(result.includes('pop_factor'), 'Should include pop_factor');
 });
 
 // ── Tier Config Tests ──

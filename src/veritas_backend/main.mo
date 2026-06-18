@@ -199,6 +199,7 @@ shared actor class Veritas() = this {
     ("diversity_factor", 50.0),
     ("longevity_factor", 50.0),
     ("penalty_factor", -100.0),
+    ("pop_factor", -50.0),
     ("base_score", 500.0),
   ];
 
@@ -777,32 +778,102 @@ shared actor class Veritas() = this {
 
   /// Internal: compute credit score from on-chain data.
   func _computeCreditScore(agentId : Principal) : CreditScore {
-    // Simplified scoring — peers at all credentials for this agent
-    // and computes a weighted reputation score from on-chain data.
+    // Full spec scoring algorithm:
+    // base = 500
+    // + 100  x min(jobs_completed / 100, 1.0)     // experience
+    // + 50   x avg_rating / 5.0                     // performance
+    // + 50   x min(sources / 5, 1.0)                // platform diversity  
+    // + 50   x min(years_active / 3, 1.0)           // longevity
+    // - 100  x min(disputes_lost / 5, 1.0)          // penalties
+    // - 50   x (1 - proof_of_possession_rate)       // verification reliability
+    // clamped to 0-850
     let agentCredentials = _getAgentCredentialsAll(agentId);
-    let credCount = agentCredentials.size();
-    var revoked : Nat = 0;
+    let totalCredentials = agentCredentials.size();
+    var revokedCount : Nat = 0;
+    var totalConfidence : Float = 0.0;
+    var confidenceCount : Nat = 0;
+    var uniqueSources : [Text] = [];
+    var earliestIssued : Int = 0;
+    var hasAny : Bool = false;
     
     for (cred in agentCredentials.vals()) {
+      // Count revoked
       switch (cred.status) {
-        case (#Revoked(_)) { revoked += 1 };
+        case (#Revoked(_)) { revokedCount += 1 };
         case (_) {};
+      };
+      
+      // Aggregate confidence across claims
+      for (claim in cred.claims.vals()) {
+        totalConfidence += claim.confidence;
+        confidenceCount += 1;
+        // Track unique sources
+        var found = false;
+        for (s in uniqueSources.vals()) {
+          if (s == claim.source) { found := true };
+        };
+        if (not found) {
+          uniqueSources := Array.append(uniqueSources, [claim.source]);
+        };
+      };
+      
+      // Track earliest credential
+      if (not hasAny or cred.issuedAt < earliestIssued) {
+        earliestIssued := cred.issuedAt;
+        hasAny := true;
       };
     };
 
-    let nCreds = if (credCount >= 100) { 100 } else { credCount };
-    let nRevoked = if (revoked >= 5) { 5 } else { revoked };
+    // Compute factors (all 0-1 normalized)
+    // jobs_completed = total active credentials
+    let nCreds = if (totalCredentials >= 100) { 100 } else { totalCredentials };
+    let experience : Float = Float.fromInt(nCreds : Int) / 100.0;
 
-    let experience = Float.fromInt(nCreds : Int) / 100.0;
-    let penalties = Float.fromInt(nRevoked : Int) / 5.0;
+    // avg_rating = average confidence (0.0-1.0) across all claims, expressed as /5.0 for spec compliance
+    let avgConfidence : Float = if (confidenceCount > 0) { totalConfidence / Float.fromInt(confidenceCount : Int) } else { 0.0 };
+    let performance : Float = avgConfidence / 1.0;
 
-    let baseScore = _getScoringWeight("base_score", 500.0);
-    let expFactor = _getScoringWeight("experience_factor", 100.0);
-    let penFactor = _getScoringWeight("penalty_factor", -100.0);
+    // platform diversity = unique claim sources (0-5 normalized)
+    let nSources = uniqueSources.size();
+    let nSrc = if (nSources >= 5) { 5 } else { nSources };
+    let diversity : Float = Float.fromInt(nSrc : Int) / 5.0;
 
-    let rawScore = baseScore + expFactor * experience + penFactor * penalties;
+    // longevity = years since earliest credential (0-3 normalized)
+    var longevity : Float = 0.0;
+    if (hasAny) {
+      let now = Time.now();
+      let ageNs = now - earliestIssued;
+      let ageYears : Float = Float.fromInt(ageNs) / 31536000000000000.0; // ns per year
+      longevity := if (ageYears >= 3.0) { 1.0 } else { ageYears / 3.0 };
+    };
 
-    let clampedScore = if (rawScore < 0.0) { 0 }
+    // penalties = revoked credentials (0-5 normalized)
+    let nRevoked = if (revokedCount >= 5) { 5 } else { revokedCount };
+    let penalties : Float = Float.fromInt(nRevoked : Int) / 5.0;
+
+    // PoP rate — simplified: 1.0 if no revoked credentials, else proportional to active/total
+    let popRate : Float = if (totalCredentials > 0) {
+      Float.fromInt((totalCredentials - revokedCount) : Int) / Float.fromInt(totalCredentials : Int)
+    } else { 1.0 };
+
+    // Get configured weights
+    let baseScore : Float = _getScoringWeight("base_score", 500.0);
+    let expFactor : Float = _getScoringWeight("experience_factor", 100.0);
+    let perfFactor : Float = _getScoringWeight("performance_factor", 50.0);
+    let divFactor : Float = _getScoringWeight("diversity_factor", 50.0);
+    let longFactor : Float = _getScoringWeight("longevity_factor", 50.0);
+    let penFactor : Float = _getScoringWeight("penalty_factor", -100.0);
+    let popFactor : Float = _getScoringWeight("pop_factor", -50.0);
+
+    let rawScore : Float = baseScore
+      + expFactor * experience
+      + perfFactor * performance
+      + divFactor * diversity
+      + longFactor * longevity
+      + penFactor * penalties
+      + popFactor * (1.0 - popRate);
+
+    let clampedScore : Int = if (rawScore < 0.0) { 0 }
       else if (rawScore > 850.0) { 850 }
       else { Float.toInt(rawScore) };
 
@@ -812,15 +883,18 @@ shared actor class Veritas() = this {
       else if (clampedScore >= 200) { #Poor }
       else { #Unrated };
 
+    let maxWeight : Float = expFactor + perfFactor + divFactor + longFactor + Float.abs(penFactor) + popFactor;
     let factors : [ScoreFactor] = [
-      { name = "experience"; weight = expFactor / 850.0; value = debug_show(credCount) # " credentials"; impact = if (experience > 0.5) { "Positive" } else { "Neutral" } },
-      { name = "penalties"; weight = Float.abs(penFactor) / 850.0; value = debug_show(revoked) # " revoked"; impact = if (penalties > 0.0) { "Negative" } else { "Neutral" } },
+      { name = "experience"; weight = expFactor / maxWeight; value = debug_show(totalCredentials) # " credentials"; impact = if (experience > 0.5) { "Positive" } else { "Neutral" } },
+      { name = "performance"; weight = perfFactor / maxWeight; value = debug_show(avgConfidence * 5.0) # "/5.0 rating"; impact = if (performance > 0.5) { "Positive" } else { "Neutral" } },
+      { name = "diversity"; weight = divFactor / maxWeight; value = debug_show(nSources) # " sources"; impact = if (diversity > 0.5) { "Positive" } else { "Neutral" } },
+      { name = "longevity"; weight = longFactor / maxWeight; value = if (hasAny) { debug_show(longevity * 3.0) # " years" } else { "0 years" }; impact = if (longevity > 0.3) { "Positive" } else { "Neutral" } },
+      { name = "penalties"; weight = Float.abs(penFactor) / maxWeight; value = debug_show(revokedCount) # " revoked"; impact = if (penalties > 0.0) { "Negative" } else { "Neutral" } },
+      { name = "pop_rate"; weight = popFactor / maxWeight; value = debug_show(popRate) # " PoP rate"; impact = if (popRate > 0.9) { "Positive" } else { "Negative" } },
     ];
 
     { score = Int.abs(clampedScore); tier = scoreTier; factors = factors; computedAt = Time.now() }
-  };
-
-  func _getAgentCredentialsAll(agentId : Principal) : [CredentialRecord] {
+  };  func _getAgentCredentialsAll(agentId : Principal) : [CredentialRecord] {
     var results : [CredentialRecord] = [];
     for ((_, cred) in credentials.entries()) {
       if (Principal.equal(cred.agentId, agentId)) {
