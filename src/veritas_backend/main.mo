@@ -20,7 +20,8 @@ import Float "mo:base/Float";
 //  Phase 2: Real SHA256 signing, hex-encoded keys, hash-based IDs
 //  Phase 3: Credit Scoring + API Tiers
 //  Phase 4: Rate Limiting & ECDSA Cost Mitigation
-//  Version: 1.4.0
+//  Phase 5: Reputation Source API + Admin Dashboard
+//  Version: 1.5.0
 // ════════════════════════════════════════════════════════════
 
 shared actor class Veritas() = this {
@@ -42,6 +43,8 @@ shared actor class Veritas() = this {
   stable var revokedPlatformSources : [Text] = [];
   stable var dailyUsageEntries : [(Principal, DailyUsage)] = [];
   stable var mintQueueEntries : [(Nat, MintQueueItem)] = [];
+  stable var platformSourceEntries : [(Text, PlatformSource)] = [];
+  stable var agentContractEntries : [(Nat, AgentContract)] = [];
 
   // ── Core Types ──
 
@@ -165,6 +168,26 @@ shared actor class Veritas() = this {
     #Failed : Text;
   };
 
+  // ── Phase 5: Reputation Source Types ──
+
+  public type PlatformSource = {
+    id : Text;
+    name : Text;
+    endpoint : Text;
+    registeredAt : Int;
+    trustLevel : TrustLevel;
+    active : Bool;
+  };
+
+  public type AgentContract = {
+    id : Nat;
+    agentId : Principal;
+    sourceId : Text;
+    startedAt : Int;
+    expiresAt : Int;
+    status : Text; // "active" | "expired" | "terminated"
+  };
+
   // ── Stable State ──
 
   flexible var identities = HashMap.HashMap<Principal, AgentIdentity>(
@@ -214,6 +237,13 @@ shared actor class Veritas() = this {
   let MAX_CONCURRENT_MINT : Nat = 10;
   let BATCH_INTERVAL_NS : Int = 60 * 1_000_000_000; // 60 seconds in nanoseconds
 
+  // ── Phase 5: Reputation Source State ──
+  flexible var platformSources = HashMap.HashMap<Text, PlatformSource>(
+    0, Text.equal, Text.hash
+  );
+  flexible var agentContracts : [AgentContract] = [];
+  flexible var contractCounter : Nat = 0;
+
   // ── Phase 3: Credit Scoring Stable State ──
   flexible var dailyUsage = HashMap.HashMap<Principal, DailyUsage>(
     0, Principal.equal, Principal.hash
@@ -245,6 +275,8 @@ shared actor class Veritas() = this {
     revokedPlatformSources := stalePlatforms;
     dailyUsageEntries := Iter.toArray(dailyUsage.entries());
     mintQueueEntries := Iter.toArray(Array.map<MintQueueItem, (Nat, MintQueueItem)>(mintQueue, func(item) { (item.id, item) }).vals());
+    platformSourceEntries := Iter.toArray(platformSources.entries());
+    agentContractEntries := Iter.toArray(Array.map<AgentContract, (Nat, AgentContract)>(agentContracts, func(c) { (c.id, c) }).vals());
   };
 
   system func postupgrade() {
@@ -263,7 +295,13 @@ shared actor class Veritas() = this {
     // Clear transient upgrade buffers
     identitiesEntries := [];
     dailyUsageEntries := [];
+    platformSources := HashMap.fromIter(platformSourceEntries.vals(), 0, Text.equal, Text.hash);
+    if (agentContractEntries.size() > 0) {
+      agentContracts := Array.map<(Nat, AgentContract), AgentContract>(agentContractEntries, func(p) { p.1 });
+    };
     mintQueueEntries := [];
+    platformSourceEntries := [];
+    agentContractEntries := [];
     balanceEntries := [];
     credentialEntries := [];
     revokedNoncesEntries := [];
@@ -296,6 +334,15 @@ shared actor class Veritas() = this {
       processingLock := false;
       lastBatchTime := 0;
       storageVersion := 5;
+    };
+    if (storageVersion < 6) {
+      // Phase 5 migration: initialize source registry
+      platformSources := HashMap.HashMap<Text, PlatformSource>(
+        0, Text.equal, Text.hash
+      );
+      agentContracts := [];
+      contractCounter := 0;
+      storageVersion := 6;
     };
   };
 
@@ -758,37 +805,6 @@ shared actor class Veritas() = this {
   };
 
   // ══════════════════════════════════════════════════════════
-  //  PHASE 1: DID DOCUMENT (§6a.4, §6a.6)
-  // ══════════════════════════════════════════════════════════
-
-  /// HTTP handler for DID document + health check.
-  public query func http_request(req : { url : Text; method : Text; headers : [(Text, Text)]; body : Blob }) : async {
-    status_code : Nat16; headers : [(Text, Text)]; body : Blob;
-  } {
-    let canisterId = Principal.toText(Principal.fromActor(this));
-    if (req.url == "/.well-known/did.json") {
-      // Include the issuer key in the DID document if available
-      let keyRef = switch (issuerKeyCache) {
-        case (?k) { ",\"verificationMethod\":[{\"id\":\"#key-1\",\"type\":\"EcdsaSecp256k1VerificationKey2019\","
-          # "\"controller\":\"did:veritas:" # canisterId # "\","
-          # "\"publicKeyHex\":\"" # _blobToHex(k) # "\"}]" };
-        case null { ",\"verificationMethod\":[{\"id\":\"#key-1\",\"type\":\"EcdsaSecp256k1VerificationKey2019\","
-          # "\"controller\":\"did:veritas:" # canisterId # "\"}]" };
-      };
-      let didDoc = "{\"@context\":\"https://www.w3.org/ns/did/v1\","
-        # "\"id\":\"did:veritas:" # canisterId # "\","
-        # "\"expires\":\"2027-06-17T00:00:00Z\""
-        # keyRef
-        # ",\"service\":[{\"type\":\"VeritasAgentRegistry\",\"serviceEndpoint\":\"https://" # canisterId # ".icp0.io/\"}]}";
-      return { status_code = 200; headers = [("Content-Type", "application/json")]; body = Text.encodeUtf8(didDoc); };
-    };
-    if (req.url == "/health") {
-      return { status_code = 200; headers = [("Content-Type", "application/json")]; body = Text.encodeUtf8("{\"status\":\"ok\"}"); };
-    };
-    return { status_code = 404; headers = [("Content-Type", "text/plain")]; body = Text.encodeUtf8("Not found"); };
-  };
-
-  // ══════════════════════════════════════════════════════════
   //  ADMIN
   // ══════════════════════════════════════════════════════════
 
@@ -1094,6 +1110,202 @@ shared actor class Veritas() = this {
     };
     // Default to Free
     { tier = "Free"; maxDaily = 100; perCallCycles = 0 };
+  };
+
+  // ══════════════════════════════════════════════════════════
+  //  PHASE 5: REPUTATION SOURCE API
+  // ══════════════════════════════════════════════════════════
+
+  /// Register a platform as a trustable reputation source.
+  public shared(msg) func registerSource(sourceId : Text, name : Text, endpoint : Text) : async Result.Result<PlatformSource, VeritasError> {
+    _assertController(msg.caller);
+    if (paused) { return #err(#Paused) };
+
+    switch (platformSources.get(sourceId)) {
+      case (?_) { return #err(#AlreadyExists) };
+      case null {};
+    };
+
+    let source : PlatformSource = {
+      id = sourceId;
+      name = name;
+      endpoint = endpoint;
+      registeredAt = Time.now();
+      trustLevel = #Untrusted;
+      active = false;
+    };
+    platformSources.put(sourceId, source);
+    return #ok(source);
+  };
+
+  /// Admin: approve a source (promote from Untrusted to Trusted).
+  public shared(msg) func approveSource(sourceId : Text) : async Result.Result<(), VeritasError> {
+    _assertController(msg.caller);
+    switch (platformSources.get(sourceId)) {
+      case (?s) {
+        platformSources.put(sourceId, { id = s.id; name = s.name; endpoint = s.endpoint; registeredAt = s.registeredAt; trustLevel = #Trusted; active = true });
+        return #ok();
+      };
+      case null { return #err(#NotFound) };
+    };
+  };
+
+  /// Admin: reject/disable a source.
+  public shared(msg) func rejectSource(sourceId : Text) : async Result.Result<(), VeritasError> {
+    _assertController(msg.caller);
+    switch (platformSources.get(sourceId)) {
+      case (?s) {
+        platformSources.put(sourceId, { id = s.id; name = s.name; endpoint = s.endpoint; registeredAt = s.registeredAt; trustLevel = #Untrusted; active = false });
+        return #ok();
+      };
+      case null { return #err(#NotFound) };
+    };
+  };
+
+  /// Set source trust level directly.
+  public shared(msg) func setSourceTrust(sourceId : Text, trustLevel : TrustLevel) : async Result.Result<(), VeritasError> {
+    _assertController(msg.caller);
+    switch (platformSources.get(sourceId)) {
+      case (?s) {
+        platformSources.put(sourceId, { id = s.id; name = s.name; endpoint = s.endpoint; registeredAt = s.registeredAt; trustLevel = trustLevel; active = (trustLevel == #Trusted or trustLevel == #Verified) });
+        return #ok();
+      };
+      case null { return #err(#NotFound) };
+    };
+  };
+
+  /// Push reputation data for an agent from a registered source.
+  /// This creates or updates credentials with reputation claims from the source.
+  public shared(msg) func pushReputation(
+    agentId : Principal,
+    sourceId : Text,
+    metrics : [Claim]
+  ) : async Result.Result<Text, VeritasError> {
+    let caller = msg.caller;
+    if (paused) { return #err(#Paused) };
+
+    // Verify source exists and is active
+    let source = switch (platformSources.get(sourceId)) {
+      case (?s) { if (s.active) { s } else { return #err(#NotAuthorized) } };
+      case null { return #err(#NotFound) };
+    };
+
+    // Create a credential record from the reputation data
+    revocationNonceCounter += 1;
+    let credentialId = _generateId(agentId, revocationNonceCounter);
+    let now = Time.now();
+    let expiresAt = now + 30 * 24 * 3600 * 1_000_000_000;
+
+    let record : CredentialRecord = {
+      id = credentialId;
+      agentId = agentId;
+      issuer = Principal.fromActor(this);
+      issuedAt = now;
+      expiresAt = expiresAt;
+      revocationNonce = revocationNonceCounter;
+      schemaVersion = 2;
+      claims = metrics;
+      status = #Active;
+    };
+
+    credentials.put(credentialId, record);
+    totalCredentialsIssued += 1;
+    return #ok(credentialId);
+  };
+
+  /// Get all registered platform sources (admin only).
+  public shared(msg) func getSources() : async [PlatformSource] {
+    _assertController(msg.caller);
+    var results : [PlatformSource] = [];
+    for ((_, src) in platformSources.entries()) {
+      results := Array.append(results, [src]);
+    };
+    return results;
+  };
+
+  /// Get active (trusted) sources for public query.
+  public query func getActiveSources() : async [PlatformSource] {
+    var results : [PlatformSource] = [];
+    for ((_, src) in platformSources.entries()) {
+      if (src.active) { results := Array.append(results, [src]) };
+    };
+    return results;
+  };
+
+  // ══════════════════════════════════════════════════════════
+  //  PHASE 5: ADMIN DASHBOARD
+  // ══════════════════════════════════════════════════════════
+
+  /// Admin dashboard — served at /admin on the canister URL.
+  /// Shows: sources, agents, stats, fees, tier config, emergency controls.
+  public query func http_request(req : { url : Text; method : Text; headers : [(Text, Text)]; body : Blob }) : async {
+    status_code : Nat16; headers : [(Text, Text)]; body : Blob;
+  } {
+    let canisterId = Principal.toText(Principal.fromActor(this));
+
+    if (req.url == "/.well-known/did.json") {
+      let keyRef = switch (issuerKeyCache) {
+        case (?k) { ",\"verificationMethod\":[{\"id\":\"#key-1\",\"type\":\"EcdsaSecp256k1VerificationKey2019\","
+          # "\"controller\":\"did:veritas:" # canisterId # "\","
+          # "\"publicKeyHex\":\"" # _blobToHex(k) # "\"}]" };
+        case null { ",\"verificationMethod\":[{\"id\":\"#key-1\",\"type\":\"EcdsaSecp256k1VerificationKey2019\","
+          # "\"controller\":\"did:veritas:" # canisterId # "\"}]" };
+      };
+      let didDoc = "{\"@context\":\"https://www.w3.org/ns/did/v1\","
+        # "\"id\":\"did:veritas:" # canisterId # "\","
+        # "\"expires\":\"2027-06-17T00:00:00Z\""
+        # keyRef
+        # ",\"service\":[{\"type\":\"VeritasAgentRegistry\",\"serviceEndpoint\":\"https://" # canisterId # ".icp0.io/\"}]}";
+      return { status_code = 200; headers = [("Content-Type", "application/json")]; body = Text.encodeUtf8(didDoc); };
+    };
+
+    if (req.url == "/health") {
+      return { status_code = 200; headers = [("Content-Type", "application/json")]; body = Text.encodeUtf8("{\"status\":\"ok\"}"); };
+    };
+
+    if (req.url == "/admin" or req.url == "/admin/") {
+      let statsInfo = "";
+      let sourcesHtml = "";
+      // Build a simple admin dashboard HTML
+      let html = "<!DOCTYPE html><html lang=\"en\"><head>"
+        # "<meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\">"
+        # "<title>VERITAS Admin</title>"
+        # "<style>body{font-family:sans-serif;max-width:960px;margin:0 auto;padding:20px;background:#f5f5f5}"
+        # "h1{color:#1a1a2e}.card{background:#fff;border-radius:8px;padding:16px;margin:12px 0;box-shadow:0 1px 3px rgba(0,0,0,0.1)}"
+        # ".badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold}"
+        # ".badge-green{background:#4caf50;color:#fff}.badge-red{background:#f44336;color:#fff}.badge-yellow{background:#ff9800;color:#fff}"
+        # "table{width:100%;border-collapse:collapse}th,td{padding:8px;text-align:left;border-bottom:1px solid #ddd}"
+        # "th{background:#1a1a2e;color:#fff}tr:hover{background:#f1f1f1}"
+        # ".btn{display:inline-block;padding:8px 16px;border-radius:4px;text-decoration:none;color:#fff;margin:4px}"
+        # ".btn-green{background:#4caf50}.btn-red{background:#f44336}.btn-blue{background:#2196f3}"
+        # "pre{background:#272822;color:#f8f8f2;padding:12px;border-radius:4px;overflow:auto}"
+        # "</style></head><body>"
+        # "<h1>🔐 VERITAS Admin</h1>"
+        # "<div class=\"card\"><h2>📊 Stats</h2>"
+        # "<pre>Canister ID: " # canisterId # "</pre>"
+        # "<pre>Storage v6 | Agents: " # debug_show(totalAgentsRegistered)
+        # " | Credentials: " # debug_show(totalCredentialsIssued)
+        # " | Fees: " # debug_show(totalFeesCollected) # " cycles</pre>"
+        # "</div>"
+        # "<div class=\"card\"><h2>⛓️ Emergency Controls</h2>"
+        # "<p>Status: " # (if (paused) { "<span class=\"badge badge-red\">PAUSED</span>" } else { "<span class=\"badge badge-green\">ACTIVE</span>" }) # "</p>"
+        # "</div>"
+        # "<div class=\"card\"><h2>📋 API Tiers</h2><table><tr><th>Tier</th><th>Daily Limit</th><th>Per-Call Cycles</th></tr>";
+      
+      var tiersHtml = html;
+      for (tc in scoreTierConfig.vals()) {
+        tiersHtml #= "<tr><td>" # tc.tier # "</td><td>" # debug_show(tc.maxDaily) # "</td><td>" # debug_show(tc.perCallCycles) # "</td></tr>";
+      };
+      tiersHtml #= "</table></div>";
+      
+      tiersHtml #= "<div class=\"card\"><h2>🌐 Sources</h2><p>Register sources via dfx: <code>dfx canister call veritas_backend registerSource</code></p></div>";
+      tiersHtml #= "<div class=\"card\"><h2>🧪 Test</h2><p>Check source: getActiveSources</p></div>";
+      tiersHtml #= "</body></html>";
+      
+      return { status_code = 200; headers = [("Content-Type", "text/html; charset=utf-8")]; body = Text.encodeUtf8(tiersHtml); };
+    };
+
+    return { status_code = 404; headers = [("Content-Type", "text/plain")]; body = Text.encodeUtf8("Not found"); };
   };
 
   // ══════════════════════════════════════════════════════════

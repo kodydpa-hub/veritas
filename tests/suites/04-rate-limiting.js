@@ -31,9 +31,9 @@ test('getCredentialQueue handles large unknown ID', () => {
 });
 
 // ── Stats Tests ──
-test('getStats includes storageVersion 5', () => {
+test('getStats includes storageVersion 6', () => {
   const result = dfx('getStats');
-  assert.ok(result.includes('storageVersion = 5'), 'Should be storage v5');
+  assert.ok(result.includes('storageVersion = 6'), 'Should be storage v6');
 });
 
 test('getStats includes non-zero totalAgents', () => {
