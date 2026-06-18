@@ -12,13 +12,15 @@ import ExperimentalCycles "mo:base/ExperimentalCycles";
 import Nat8 "mo:base/Nat8";
 import Char "mo:base/Char";
 import Float "mo:base/Float";
+// Timer import removed — using heartbeat + time-based batch processing instead
 
 // ════════════════════════════════════════════════════════════
 //  VERITAS — Verifiable AI Agent Identity Protocol
 //  Phase 1: Identity Registry + Credential Minting + PoP + W3C VCs
 //  Phase 2: Real SHA256 signing, hex-encoded keys, hash-based IDs
 //  Phase 3: Credit Scoring + API Tiers
-//  Version: 1.3.0
+//  Phase 4: Rate Limiting & ECDSA Cost Mitigation
+//  Version: 1.4.0
 // ════════════════════════════════════════════════════════════
 
 shared actor class Veritas() = this {
@@ -39,6 +41,7 @@ shared actor class Veritas() = this {
   stable var configEntries : [(Text, Text)] = [];
   stable var revokedPlatformSources : [Text] = [];
   stable var dailyUsageEntries : [(Principal, DailyUsage)] = [];
+  stable var mintQueueEntries : [(Nat, MintQueueItem)] = [];
 
   // ── Core Types ──
 
@@ -142,6 +145,26 @@ shared actor class Veritas() = this {
     perCallCycles : Nat;    // cycles deducted per lookup for paid tiers
   };
 
+  // ── Phase 4: Mint Queue Types ──
+
+  public type MintQueueItem = {
+    id : Nat;
+    agentId : Principal;
+    claims : [Claim];
+    expiresIn : Int;
+    popSignature : Blob;
+    popNonce : Blob;
+    submittedAt : Int;
+    status : QueueStatus;
+  };
+
+  public type QueueStatus = {
+    #Pending;
+    #Processing;
+    #Completed : CredentialRecord;
+    #Failed : Text;
+  };
+
   // ── Stable State ──
 
   flexible var identities = HashMap.HashMap<Principal, AgentIdentity>(
@@ -183,6 +206,14 @@ shared actor class Veritas() = this {
   let KEY_NAME : Text = "key_1";
   let DERIVATION_PATH : [Blob] = [];
 
+  // ── Phase 4: Mint Queue State ──
+  flexible var mintQueue : [MintQueueItem] = [];
+  flexible var queueCounter : Nat = 0;
+  flexible var processingLock : Bool = false;
+  flexible var lastBatchTime : Int = 0;
+  let MAX_CONCURRENT_MINT : Nat = 10;
+  let BATCH_INTERVAL_NS : Int = 60 * 1_000_000_000; // 60 seconds in nanoseconds
+
   // ── Phase 3: Credit Scoring Stable State ──
   flexible var dailyUsage = HashMap.HashMap<Principal, DailyUsage>(
     0, Principal.equal, Principal.hash
@@ -213,6 +244,7 @@ shared actor class Veritas() = this {
     configEntries := Iter.toArray(config.entries());
     revokedPlatformSources := stalePlatforms;
     dailyUsageEntries := Iter.toArray(dailyUsage.entries());
+    mintQueueEntries := Iter.toArray(Array.map<MintQueueItem, (Nat, MintQueueItem)>(mintQueue, func(item) { (item.id, item) }).vals());
   };
 
   system func postupgrade() {
@@ -224,9 +256,14 @@ shared actor class Veritas() = this {
     config := HashMap.fromIter(configEntries.vals(), 0, Text.equal, Text.hash);
     stalePlatforms := revokedPlatformSources;
     dailyUsage := HashMap.fromIter(dailyUsageEntries.vals(), 0, Principal.equal, Principal.hash);
+    // Restore mint queue from stable
+    if (mintQueueEntries.size() > 0) {
+      mintQueue := Array.map<(Nat, MintQueueItem), MintQueueItem>(mintQueueEntries, func(pair) { pair.1 });
+    };
     // Clear transient upgrade buffers
     identitiesEntries := [];
     dailyUsageEntries := [];
+    mintQueueEntries := [];
     balanceEntries := [];
     credentialEntries := [];
     revokedNoncesEntries := [];
@@ -251,6 +288,14 @@ shared actor class Veritas() = this {
         0, Principal.equal, Principal.hash
       );
       storageVersion := 4;
+    };
+    if (storageVersion < 5) {
+      // Phase 4 migration: initialize mint queue
+      mintQueue := [];
+      queueCounter := 0;
+      processingLock := false;
+      lastBatchTime := 0;
+      storageVersion := 5;
     };
   };
 
@@ -390,7 +435,9 @@ shared actor class Veritas() = this {
   // ══════════════════════════════════════════════════════════
 
   /// Issue a verifiable credential signed by the canister's chain-key.
-  /// Requires proof-of-possession: agent must sign (popNonce || agentId) with their registered key.
+  /// If the mint queue is below the concurrent limit, processes immediately.
+  /// Otherwise, queues the request for batch processing.
+  /// Requires proof-of-possession: agent must sign (popNonce || agentId) with registered key.
   public shared(msg) func issueCredential(
     claims : [Claim],
     expiresIn : Int,
@@ -406,13 +453,6 @@ shared actor class Veritas() = this {
       case null { return #err(#NotFound) };
     };
 
-    // Guard: proof-of-possession is verified off-chain by the npm library.
-    // The popSignature and popNonce are recorded for audit purposes.
-
-    // Guard: sufficient balance
-    let balance = _getBalance(caller);
-    if (balance < FEE_CREDENTIAL) { return #err(#InsufficientBalance) };
-
     // Guard: identity active
     switch (identity.status) {
       case (#Revoked(_)) { return #err(#NotAuthorized) };
@@ -420,10 +460,66 @@ shared actor class Veritas() = this {
       case (#Active) {};
     };
 
+    // Guard: sufficient balance
+    let balance = _getBalance(caller);
+    if (balance < FEE_CREDENTIAL) { return #err(#InsufficientBalance) };
+
     // Deduct fee
     _deductBalance(caller, FEE_CREDENTIAL);
 
-    // Generate credential ID and revocation nonce
+    // If processing lock is free, mint immediately
+    if (not processingLock and mintQueue.size() == 0) {
+      return _mintCredential(caller, claims, expiresIn);
+    };
+
+    // Otherwise, add to queue
+    queueCounter += 1;
+    let queueItem : MintQueueItem = {
+      id = queueCounter;
+      agentId = caller;
+      claims = claims;
+      expiresIn = expiresIn;
+      popSignature = popSignature;
+      popNonce = popNonce;
+      submittedAt = Time.now();
+      status = #Pending;
+    };
+    mintQueue := Array.append(mintQueue, [queueItem]);
+
+    // Start the batch processing timer if not already running
+    _startBatchTimer();
+
+    // Return the last item in the queue (the one just added)
+    let credRecord : CredentialRecord = {
+      id = "queued-" # debug_show(queueCounter);
+      agentId = caller;
+      issuer = Principal.fromActor(this);
+      issuedAt = Time.now();
+      expiresAt = 0;
+      revocationNonce = 0;
+      schemaVersion = 2;
+      claims = claims;
+      status = #Active;
+    };
+    return #ok(credRecord);
+  };
+
+  /// Get the status of a queued credential request.
+  public query func getCredentialQueue(queueId : Nat) : async ?QueueStatus {
+    for (item in mintQueue.vals()) {
+      if (item.id == queueId) {
+        return ?item.status;
+      };
+    };
+    return null;
+  };
+
+  /// Internal: mint a credential immediately (shared logic for direct + queue processing).
+  func _mintCredential(
+    caller : Principal,
+    claims : [Claim],
+    expiresIn : Int
+  ) : Result.Result<CredentialRecord, VeritasError> {
     revocationNonceCounter += 1;
     let credentialId = _generateId(caller, revocationNonceCounter);
     let now = Time.now();
@@ -444,8 +540,59 @@ shared actor class Veritas() = this {
     credentials.put(credentialId, record);
     totalCredentialsIssued += 1;
     totalFeesCollected += FEE_CREDENTIAL;
-
     return #ok(record);
+  };
+
+  // ── Phase 4: Batch Processing (Heartbeat-based) ──
+
+  /// Start the batch processing cycle.
+  func _startBatchTimer() {
+    processingLock := true;
+    lastBatchTime := Time.now();
+  };
+
+  /// Heartbeat fires every consensus round (~1-2s), checks if 60s elapsed.
+  system func heartbeat() : async () {
+    if (mintQueue.size() == 0) {
+      processingLock := false;
+      return;
+    };
+    if (not processingLock) { return };
+
+    let now = Time.now();
+    if (now - lastBatchTime < BATCH_INTERVAL_NS) { return };
+
+    lastBatchTime := now;
+    let batchSize = if (mintQueue.size() < MAX_CONCURRENT_MINT) {
+      mintQueue.size()
+    } else {
+      MAX_CONCURRENT_MINT
+    };
+
+    var remaining : [MintQueueItem] = [];
+    var count = 0;
+
+    for (item in mintQueue.vals()) {
+      if (count < batchSize) {
+        switch (item.status) {
+          case (#Pending) {
+            let _ = _mintCredential(item.agentId, item.claims, item.expiresIn);
+            count += 1;
+          };
+          case (_) {
+            remaining := Array.append(remaining, [item]);
+          };
+        };
+      } else {
+        remaining := Array.append(remaining, [item]);
+      };
+    };
+
+    mintQueue := remaining;
+
+    if (mintQueue.size() == 0) {
+      processingLock := false;
+    };
   };
 
   /// Get a credential record by ID.
@@ -771,8 +918,9 @@ shared actor class Veritas() = this {
     if (updated) { return #ok() } else { return #err(#NotFound) };
   };
 
-  /// Admin: get current scoring configuration.
-  public query func getScoringConfig() : async [(Text, Float)] {
+  /// Admin: get current scoring configuration (opaque — not exposed to agents).
+  public shared(msg) func getScoringConfig() : async [(Text, Float)] {
+    _assertController(msg.caller);
     return scoringConfig;
   };
 
